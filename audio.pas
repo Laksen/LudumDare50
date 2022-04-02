@@ -83,10 +83,168 @@ type
     property Time: double read GetTime;
   end;
 
+  TChord = record
+    Name: char;
+    Notes: array of string;
+  end;
+
 var
-  Player: TMusicPlayer;
+  MusicPlayer: TMusicPlayer;
+  
+function KeyToChord(s: string): string;
+function ChordToNote(s: string): double;
+
+function Chord(name: char; const notes: array of string): TChord;
+
+procedure play(inst: TInstrument; prog: string; start, spacing: double);
+procedure playCh(inst: TInstrument; prog: string; start, spacing: double; const Chords: array of TChord);
 
 implementation
+
+function ChordToNote(s: string): double;
+begin
+  case s of
+    'c1': exit(261.63);
+    'd1': exit(293.66);
+    'e1': exit(329.63);
+    'f1': exit(349.23);
+    'g1': exit(392.00);
+    'a1': exit(440.00);
+    'h1': exit(493.88);
+
+    'c2': exit(261.63*2);
+    'd2': exit(293.66*2);
+    'e2': exit(329.63*2);
+    'f2': exit(349.23*2);
+    'g2': exit(392.00*2);
+    'a2': exit(440.00*2);
+    'h2': exit(493.88*2);
+
+    'c3': exit(261.63*4);
+    'd3': exit(293.66*4);
+    'e3': exit(329.63*4);
+    'f3': exit(349.23*4);
+    'g3': exit(392.00*4);
+    'a3': exit(440.00*4);
+    'h3': exit(493.88*4);
+  else
+    result:=0;
+  end;
+end;
+
+function KeyToChord(s: string): string;
+begin
+  case s of
+    'z': exit('c1');
+    'x': exit('d1');
+    'c': exit('e1');
+    'v': exit('f1');
+    'b': exit('g1');
+    'n': exit('a1');
+    'm': exit('h1');
+
+    's': exit('c2');
+    'd': exit('d2');
+    'f': exit('e2');
+    'g': exit('f2');
+    'h': exit('g2');
+    'j': exit('a2');
+    'k': exit('h2');
+
+    'e': exit('c3');
+    'r': exit('d3');
+    't': exit('e3');
+    'y': exit('f3');
+    'u': exit('g3');
+    'i': exit('a3');
+    'o': exit('h3');
+  else
+    result:=' ';
+  end;
+end;
+
+procedure play(inst: TInstrument; prog: string; start, spacing: double);
+var
+  note: TNote;
+  ch: Char;
+  chord: String;
+  skip: Boolean;
+  i: Integer;
+begin
+  skip:=false;
+  for i:=1 to length(prog) do
+  begin
+    if skip then
+    begin
+      skip:=false;
+      continue;
+    end;
+
+    ch:=prog[i];
+
+    if ch='.' then
+    begin
+      if note<>nil then
+      begin
+        note.StopTime:=start+(i-2)*spacing;
+        note:=nil;
+      end;
+    end
+    else if ch<>'-' then
+    begin
+      chord:=ch+prog[i+1];
+      skip:=true;
+
+      note:=MusicPlayer.AddNote(TNote.Create(ChordToNote(chord), start+(i-1)*spacing, start+(i+1)*spacing, inst));
+    end;
+  end;
+end;
+
+procedure playCh(inst: TInstrument; prog: string; start, spacing: double; const Chords: array of TChord);
+var
+  notes: TList;
+  ch: Char;
+  i, i2: integer;
+  chord, n: String;
+  note: JSValue;
+begin
+  notes:=tlist.Create;
+  for i:=1 to length(prog) do
+  begin
+    ch:=prog[i];
+
+    if ch='.' then
+    begin
+      if notes.Count>0 then
+      begin
+        for note in notes do
+          TNote(note).StopTime:=start+(i-2)*spacing;
+        notes.clear;
+      end;
+    end
+    else if ch<>'-' then
+    begin
+      chord:=ch;
+
+      for i2:=0 to high(chords) do
+      begin
+        if chords[i2].name=chord then
+        begin
+          for n in chords[i2].Notes do
+            notes.add(MusicPlayer.AddNote(TNote.Create(ChordToNote(n), start+(i-1)*spacing, start+(i+1)*spacing, inst)));
+          break;
+        end;
+      end;
+    end;
+  end;
+  notes.Free;
+end;
+
+function Chord(name: char; const notes: array of string): TChord;
+begin
+  result.name:=name;
+  result.Notes:=notes;
+end;
 
 function TNote.GetFinalTime: double;
 begin
@@ -290,7 +448,7 @@ begin
 end;
 
 initialization
-  Player:=TMusicPlayer.Create;
+  MusicPlayer:=TMusicPlayer.Create;
 
 end.
 

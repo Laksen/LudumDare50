@@ -1,0 +1,33 @@
+body {
+    background-color: lightsalmon;
+    margin:  0 !important;
+    padding: 0 !important;
+}
+
+h1, h2, h3 {
+    text-align: center;
+}
+
+canvas {
+    display: block;
+}
+
+thead {
+    font-weight: bold;
+}
+
+.main_div {
+    /* background-color: ivory; */
+    margin: auto;
+    width:  80%;
+    height: 100vh;
+}
+
+.centered {
+    margin: auto;
+    width: fit-content;
+}
+
+.terms {
+    font-style: italic;
+}

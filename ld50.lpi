@@ -49,6 +49,47 @@
         <Filename Value="audiostuff.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="gamemath.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="GameMath"/>
+      </Unit>
+      <Unit>
+        <Filename Value="gameverlets.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="GameVerlets"/>
+      </Unit>
+      <Unit>
+        <Filename Value="gamebase.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="GameBase"/>
+      </Unit>
+      <Unit>
+        <Filename Value="resources.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Resources"/>
+      </Unit>
+      <Unit>
+        <Filename Value="tmp.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="svgreader.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SvgReader"/>
+      </Unit>
+      <Unit>
+        <Filename Value="objloader.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="guibase.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="guictrls.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

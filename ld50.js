@@ -1512,6 +1512,15 @@ rtl.module("System",[],function () {
     this.BeforeDestruction = function () {
     };
   });
+  this.Random = function (Range) {
+    return Math.floor(Math.random()*Range);
+  };
+  this.Sqr = function (A) {
+    return A*A;
+  };
+  this.Sqr$1 = function (A) {
+    return A*A;
+  };
   this.Trunc = function (A) {
     if (!Math.trunc) {
       Math.trunc = function(v) {
@@ -1633,6 +1642,7 @@ rtl.module("System",[],function () {
 rtl.module("Types",["System"],function () {
   "use strict";
   var $mod = this;
+  this.TDuplicates = {"0": "dupIgnore", dupIgnore: 0, "1": "dupAccept", dupAccept: 1, "2": "dupError", dupError: 2};
 });
 rtl.module("JS",["System","Types"],function () {
   "use strict";
@@ -1669,7 +1679,7 @@ rtl.module("JS",["System","Types"],function () {
 rtl.module("RTLConsts",["System"],function () {
   "use strict";
   var $mod = this;
-  $mod.$resourcestrings = {SArgumentMissing: {org: 'Missing argument in format "%s"'}, SInvalidFormat: {org: 'Invalid format specifier : "%s"'}, SInvalidArgIndex: {org: 'Invalid argument index in format: "%s"'}, SListCapacityError: {org: "List capacity (%s) exceeded."}, SListCountError: {org: "List count (%s) out of bounds."}, SListIndexError: {org: "List index (%s) out of bounds"}};
+  $mod.$resourcestrings = {SArgumentMissing: {org: 'Missing argument in format "%s"'}, SInvalidFormat: {org: 'Invalid format specifier : "%s"'}, SInvalidArgIndex: {org: 'Invalid argument index in format: "%s"'}, SListCapacityError: {org: "List capacity (%s) exceeded."}, SListCountError: {org: "List count (%s) out of bounds."}, SListIndexError: {org: "List index (%s) out of bounds"}, SSortedListError: {org: "Operation not allowed on sorted list"}, SDuplicateString: {org: "String list does not allow duplicates"}, SErrFindNeedsSortedList: {org: "Cannot use find on unsorted list"}};
 });
 rtl.module("SysUtils",["System","RTLConsts","JS"],function () {
   "use strict";
@@ -1792,6 +1802,30 @@ rtl.module("SysUtils",["System","RTLConsts","JS"],function () {
   };
   this.UpperCase = function (s) {
     return s.toUpperCase();
+  };
+  this.LowerCase = function (s) {
+    return s.toLowerCase();
+  };
+  this.CompareStr = function (s1, s2) {
+    var l1 = s1.length;
+    var l2 = s2.length;
+    if (l1<=l2){
+      var s = s2.substr(0,l1);
+      if (s1<s){ return -1;
+      } else if (s1>s){ return 1;
+      } else { return l1<l2 ? -1 : 0; };
+    } else {
+      var s = s1.substr(0,l2);
+      if (s<s2){ return -1;
+      } else { return 1; };
+    };
+  };
+  this.CompareText = function (s1, s2) {
+    var l1 = s1.toLowerCase();
+    var l2 = s2.toLowerCase();
+    if (l1>l2){ return 1;
+    } else if (l1<l2){ return -1;
+    } else { return 0; };
   };
   this.Format = function (Fmt, Args) {
     var Result = "";
@@ -2371,6 +2405,8 @@ rtl.module("Classes",["System","RTLConsts","Types","SysUtils","JS"],function () 
   var $impl = $mod.$impl;
   rtl.createClass(this,"EListError",pas.SysUtils.Exception,function () {
   });
+  rtl.createClass(this,"EStringListError",this.EListError,function () {
+  });
   rtl.createClass(this,"TFPList",pas.System.TObject,function () {
     this.$init = function () {
       pas.System.TObject.$init.call(this);
@@ -2458,6 +2494,15 @@ rtl.module("Classes",["System","RTLConsts","Types","SysUtils","JS"],function () 
       while ((Result < C) && (this.FList[Result] != Item)) Result += 1;
       if (Result >= C) Result = -1;
       return Result;
+    };
+    this.Sort = function (Compare) {
+      var $Self = this;
+      if (!(rtl.length(this.FList) > 0) || (this.FCount < 2)) return;
+      $impl.QuickSort(rtl.arrayRef(this.FList),0,this.FCount - 1,function (Item1, Item2) {
+        var Result = 0;
+        Result = Compare(Item1,Item2);
+        return Result;
+      });
     };
   });
   this.TListNotification = {"0": "lnAdded", lnAdded: 0, "1": "lnExtracted", lnExtracted: 1, "2": "lnDeleted", lnDeleted: 2};
@@ -2561,14 +2606,396 @@ rtl.module("Classes",["System","RTLConsts","Types","SysUtils","JS"],function () 
       if (Result !== -1) this.Delete(Result);
       return Result;
     };
+    this.Sort = function (Compare) {
+      this.FList.Sort(Compare);
+    };
+  });
+  rtl.createClass(this,"TPersistent",pas.System.TObject,function () {
+  });
+  rtl.createClass(this,"TStrings",this.TPersistent,function () {
+    this.$init = function () {
+      $mod.TPersistent.$init.call(this);
+      this.FAlwaysQuote = false;
+      this.FUpdateCount = 0;
+      this.FStrictDelimiter = false;
+    };
+    this.Error = function (Msg, Data) {
+      throw $mod.EStringListError.$create("CreateFmt",[Msg,[pas.SysUtils.IntToStr(Data)]]);
+    };
+    this.GetCapacity = function () {
+      var Result = 0;
+      Result = this.GetCount();
+      return Result;
+    };
+    this.GetObject = function (Index) {
+      var Result = null;
+      if (Index === 0) ;
+      Result = null;
+      return Result;
+    };
+    this.PutObject = function (Index, AObject) {
+      if (Index === 0) return;
+      if (AObject === null) return;
+    };
+    this.DoCompareText = function (s1, s2) {
+      var Result = 0;
+      Result = pas.SysUtils.CompareText(s1,s2);
+      return Result;
+    };
+    this.Create$1 = function () {
+      pas.System.TObject.Create.call(this);
+      this.FAlwaysQuote = false;
+      return this;
+    };
+    this.Destroy = function () {
+      pas.System.TObject.Destroy.call(this);
+    };
+    this.Add = function (S) {
+      var Result = 0;
+      Result = this.GetCount();
+      this.Insert(this.GetCount(),S);
+      return Result;
+    };
+    this.AddObject = function (S, AObject) {
+      var Result = 0;
+      Result = this.Add(S);
+      this.PutObject(Result,AObject);
+      return Result;
+    };
+    this.IndexOf = function (S) {
+      var Result = 0;
+      Result = 0;
+      while ((Result < this.GetCount()) && (this.DoCompareText(this.Get(Result),S) !== 0)) Result = Result + 1;
+      if (Result === this.GetCount()) Result = -1;
+      return Result;
+    };
+  });
+  rtl.recNewT(this,"TStringItem",function () {
+    this.FString = "";
+    this.FObject = null;
+    this.$eq = function (b) {
+      return (this.FString === b.FString) && (this.FObject === b.FObject);
+    };
+    this.$assign = function (s) {
+      this.FString = s.FString;
+      this.FObject = s.FObject;
+      return this;
+    };
+  });
+  this.TStringsSortStyle = {"0": "sslNone", sslNone: 0, "1": "sslUser", sslUser: 1, "2": "sslAuto", sslAuto: 2};
+  rtl.createClass(this,"TStringList",this.TStrings,function () {
+    this.$init = function () {
+      $mod.TStrings.$init.call(this);
+      this.FList = [];
+      this.FCount = 0;
+      this.FOnChange = null;
+      this.FOnChanging = null;
+      this.FDuplicates = 0;
+      this.FCaseSensitive = false;
+      this.FForceSort = false;
+      this.FOwnsObjects = false;
+      this.FSortStyle = 0;
+    };
+    this.$final = function () {
+      this.FList = undefined;
+      this.FOnChange = undefined;
+      this.FOnChanging = undefined;
+      $mod.TStrings.$final.call(this);
+    };
+    this.ExchangeItemsInt = function (Index1, Index2) {
+      var S = "";
+      var O = null;
+      S = this.FList[Index1].FString;
+      O = this.FList[Index1].FObject;
+      this.FList[Index1].FString = this.FList[Index2].FString;
+      this.FList[Index1].FObject = this.FList[Index2].FObject;
+      this.FList[Index2].FString = S;
+      this.FList[Index2].FObject = O;
+    };
+    this.GetSorted = function () {
+      var Result = false;
+      Result = this.FSortStyle in rtl.createSet(1,2);
+      return Result;
+    };
+    this.Grow = function () {
+      var NC = 0;
+      NC = this.GetCapacity();
+      if (NC >= 256) {
+        NC = NC + rtl.trunc(NC / 4)}
+       else if (NC === 0) {
+        NC = 4}
+       else NC = NC * 4;
+      this.SetCapacity(NC);
+    };
+    this.InternalClear = function (FromIndex, ClearOnly) {
+      var I = 0;
+      if (FromIndex < this.FCount) {
+        if (this.FOwnsObjects) {
+          for (var $l = FromIndex, $end = this.FCount - 1; $l <= $end; $l++) {
+            I = $l;
+            this.FList[I].FString = "";
+            pas.SysUtils.FreeAndNil({p: this.FList[I], get: function () {
+                return this.p.FObject;
+              }, set: function (v) {
+                this.p.FObject = v;
+              }});
+          };
+        } else {
+          for (var $l1 = FromIndex, $end1 = this.FCount - 1; $l1 <= $end1; $l1++) {
+            I = $l1;
+            this.FList[I].FString = "";
+          };
+        };
+        this.FCount = FromIndex;
+      };
+      if (!ClearOnly) this.SetCapacity(0);
+    };
+    this.QuickSort = function (L, R, CompareFn) {
+      var Pivot = 0;
+      var vL = 0;
+      var vR = 0;
+      if ((R - L) <= 1) {
+        if (L < R) if (CompareFn(this,L,R) > 0) this.ExchangeItems(L,R);
+        return;
+      };
+      vL = L;
+      vR = R;
+      Pivot = L + pas.System.Random(R - L);
+      while (vL < vR) {
+        while ((vL < Pivot) && (CompareFn(this,vL,Pivot) <= 0)) vL += 1;
+        while ((vR > Pivot) && (CompareFn(this,vR,Pivot) > 0)) vR -= 1;
+        this.ExchangeItems(vL,vR);
+        if (Pivot === vL) {
+          Pivot = vR}
+         else if (Pivot === vR) Pivot = vL;
+      };
+      if ((Pivot - 1) >= L) this.QuickSort(L,Pivot - 1,CompareFn);
+      if ((Pivot + 1) <= R) this.QuickSort(Pivot + 1,R,CompareFn);
+    };
+    this.SetSorted = function (Value) {
+      if (Value) {
+        this.SetSortStyle(2)}
+       else this.SetSortStyle(0);
+    };
+    this.SetCaseSensitive = function (b) {
+      if (b === this.FCaseSensitive) return;
+      this.FCaseSensitive = b;
+      if (this.FSortStyle === 2) {
+        this.FForceSort = true;
+        try {
+          this.Sort();
+        } finally {
+          this.FForceSort = false;
+        };
+      };
+    };
+    this.SetSortStyle = function (AValue) {
+      if (this.FSortStyle === AValue) return;
+      if (AValue === 2) this.Sort();
+      this.FSortStyle = AValue;
+    };
+    this.CheckIndex = function (AIndex) {
+      if ((AIndex < 0) || (AIndex >= this.FCount)) this.Error(rtl.getResStr(pas.RTLConsts,"SListIndexError"),AIndex);
+    };
+    this.ExchangeItems = function (Index1, Index2) {
+      this.ExchangeItemsInt(Index1,Index2);
+    };
+    this.Changed = function () {
+      if (this.FUpdateCount === 0) {
+        if (this.FOnChange != null) this.FOnChange(this);
+      };
+    };
+    this.Changing = function () {
+      if (this.FUpdateCount === 0) if (this.FOnChanging != null) this.FOnChanging(this);
+    };
+    this.Get = function (Index) {
+      var Result = "";
+      this.CheckIndex(Index);
+      Result = this.FList[Index].FString;
+      return Result;
+    };
+    this.GetCapacity = function () {
+      var Result = 0;
+      Result = rtl.length(this.FList);
+      return Result;
+    };
+    this.GetCount = function () {
+      var Result = 0;
+      Result = this.FCount;
+      return Result;
+    };
+    this.GetObject = function (Index) {
+      var Result = null;
+      this.CheckIndex(Index);
+      Result = this.FList[Index].FObject;
+      return Result;
+    };
+    this.PutObject = function (Index, AObject) {
+      this.CheckIndex(Index);
+      this.Changing();
+      this.FList[Index].FObject = AObject;
+      this.Changed();
+    };
+    this.SetCapacity = function (NewCapacity) {
+      if (NewCapacity < 0) this.Error(rtl.getResStr(pas.RTLConsts,"SListCapacityError"),NewCapacity);
+      if (NewCapacity !== this.GetCapacity()) this.FList = rtl.arraySetLength(this.FList,$mod.TStringItem,NewCapacity);
+    };
+    this.InsertItem = function (Index, S) {
+      this.InsertItem$1(Index,S,null);
+    };
+    this.InsertItem$1 = function (Index, S, O) {
+      var It = $mod.TStringItem.$new();
+      this.Changing();
+      if (this.FCount === this.GetCapacity()) this.Grow();
+      It.FString = S;
+      It.FObject = O;
+      this.FList.splice(Index,0,It);
+      this.FCount += 1;
+      this.Changed();
+    };
+    this.DoCompareText = function (s1, s2) {
+      var Result = 0;
+      if (this.FCaseSensitive) {
+        Result = pas.SysUtils.CompareStr(s1,s2)}
+       else Result = pas.SysUtils.CompareText(s1,s2);
+      return Result;
+    };
+    this.Destroy = function () {
+      this.InternalClear(0,false);
+      $mod.TStrings.Destroy.call(this);
+    };
+    this.Add = function (S) {
+      var Result = 0;
+      if (!(this.FSortStyle === 2)) {
+        Result = this.FCount}
+       else if (this.Find(S,{get: function () {
+          return Result;
+        }, set: function (v) {
+          Result = v;
+        }})) {
+        var $tmp = this.FDuplicates;
+        if ($tmp === 0) {
+          return Result}
+         else if ($tmp === 2) this.Error(rtl.getResStr(pas.RTLConsts,"SDuplicateString"),0);
+      };
+      this.InsertItem(Result,S);
+      return Result;
+    };
+    this.Find = function (S, Index) {
+      var Result = false;
+      var L = 0;
+      var R = 0;
+      var I = 0;
+      var CompareRes = 0;
+      Result = false;
+      Index.set(-1);
+      if (!this.GetSorted()) throw $mod.EListError.$create("Create$1",[rtl.getResStr(pas.RTLConsts,"SErrFindNeedsSortedList")]);
+      L = 0;
+      R = this.GetCount() - 1;
+      while (L <= R) {
+        I = L + rtl.trunc((R - L) / 2);
+        CompareRes = this.DoCompareText(S,this.FList[I].FString);
+        if (CompareRes > 0) {
+          L = I + 1}
+         else {
+          R = I - 1;
+          if (CompareRes === 0) {
+            Result = true;
+            if (this.FDuplicates !== 1) L = I;
+          };
+        };
+      };
+      Index.set(L);
+      return Result;
+    };
+    this.IndexOf = function (S) {
+      var Result = 0;
+      if (!this.GetSorted()) {
+        Result = $mod.TStrings.IndexOf.call(this,S)}
+       else if (!this.Find(S,{get: function () {
+          return Result;
+        }, set: function (v) {
+          Result = v;
+        }})) Result = -1;
+      return Result;
+    };
+    this.Insert = function (Index, S) {
+      if (this.FSortStyle === 2) {
+        this.Error(rtl.getResStr(pas.RTLConsts,"SSortedListError"),0)}
+       else {
+        if ((Index < 0) || (Index > this.FCount)) this.Error(rtl.getResStr(pas.RTLConsts,"SListIndexError"),Index);
+        this.InsertItem(Index,S);
+      };
+    };
+    this.Sort = function () {
+      this.CustomSort($impl.StringListAnsiCompare);
+    };
+    this.CustomSort = function (CompareFn) {
+      if ((this.FForceSort || !(this.FSortStyle === 2)) && (this.FCount > 1)) {
+        this.Changing();
+        this.QuickSort(0,this.FCount - 1,CompareFn);
+        this.Changed();
+      };
+    };
   });
   $mod.$implcode = function () {
+    $impl.QuickSort = function (aList, L, R, Compare) {
+      var I = 0;
+      var J = 0;
+      var P = undefined;
+      var Q = undefined;
+      do {
+        I = L;
+        J = R;
+        P = aList[rtl.trunc((L + R) / 2)];
+        do {
+          while (Compare(P,aList[I]) > 0) I = I + 1;
+          while (Compare(P,aList[J]) < 0) J = J - 1;
+          if (I <= J) {
+            Q = aList[I];
+            aList[I] = aList[J];
+            aList[J] = Q;
+            I = I + 1;
+            J = J - 1;
+          };
+        } while (!(I > J));
+        if ((J - L) < (R - I)) {
+          if (L < J) $impl.QuickSort(rtl.arrayRef(aList),L,J,Compare);
+          L = I;
+        } else {
+          if (I < R) $impl.QuickSort(rtl.arrayRef(aList),I,R,Compare);
+          R = J;
+        };
+      } while (!(L >= R));
+    };
+    $impl.StringListAnsiCompare = function (List, Index1, Index) {
+      var Result = 0;
+      Result = List.DoCompareText(List.FList[Index1].FString,List.FList[Index].FString);
+      return Result;
+    };
     $impl.ClassList = null;
   };
   $mod.$init = function () {
     $impl.ClassList = new Object();
   };
 },[]);
+rtl.module("Math",["System"],function () {
+  "use strict";
+  var $mod = this;
+  this.Ceil = function (A) {
+    var Result = 0;
+    Result = pas.System.Trunc(Math.ceil(A));
+    return Result;
+  };
+});
+rtl.module("Web",["System","Types","JS"],function () {
+  "use strict";
+  var $mod = this;
+});
+rtl.module("webaudio",["System","SysUtils","JS","Web","Types"],function () {
+  "use strict";
+  var $mod = this;
+});
 rtl.module("contnrs",["System","SysUtils","Classes"],function () {
   "use strict";
   var $mod = this;
@@ -2592,62 +3019,6 @@ rtl.module("contnrs",["System","SysUtils","Classes"],function () {
     };
   });
 },["JS"]);
-rtl.module("fpjson",["System","JS","RTLConsts","Types","SysUtils","Classes","contnrs"],function () {
-  "use strict";
-  var $mod = this;
-  rtl.createClass(this,"TJSONData",pas.System.TObject,function () {
-    this.ElementSeps = [", ",","];
-    this.FCompressedJSON = false;
-    this.FElementSep = "";
-    this.DetermineElementSeparators = function () {
-      $mod.TJSONData.FElementSep = this.ElementSeps[+this.FCompressedJSON];
-    };
-  });
-  rtl.createClass(this,"TJSONObject",this.TJSONData,function () {
-    this.ElementStart = ['"',""];
-    this.SpacedQuoted = ['" : '," : "];
-    this.UnSpacedQuoted = ['":',":"];
-    this.ObjStartSeps = ["{ ","{"];
-    this.ObjEndSeps = [" }","}"];
-    this.FUnquotedMemberNames = false;
-    this.FObjStartSep = "";
-    this.FObjEndSep = "";
-    this.FElementEnd = "";
-    this.FElementStart = "";
-    this.$init = function () {
-      $mod.TJSONData.$init.call(this);
-      this.FHash = null;
-    };
-    this.$final = function () {
-      this.FHash = undefined;
-      $mod.TJSONData.$final.call(this);
-    };
-    this.DetermineElementQuotes = function () {
-      $mod.TJSONObject.FObjStartSep = this.ObjStartSeps[+$mod.TJSONData.FCompressedJSON];
-      $mod.TJSONObject.FObjEndSep = this.ObjEndSeps[+$mod.TJSONData.FCompressedJSON];
-      if ($mod.TJSONData.FCompressedJSON) {
-        $mod.TJSONObject.FElementEnd = this.UnSpacedQuoted[+this.FUnquotedMemberNames]}
-       else $mod.TJSONObject.FElementEnd = this.SpacedQuoted[+this.FUnquotedMemberNames];
-      $mod.TJSONObject.FElementStart = this.ElementStart[+this.FUnquotedMemberNames];
-    };
-    this.Destroy = function () {
-      this.FHash = null;
-      pas.System.TObject.Destroy.call(this);
-    };
-  });
-  $mod.$init = function () {
-    $mod.TJSONData.DetermineElementSeparators();
-    $mod.TJSONObject.DetermineElementQuotes();
-  };
-},[]);
-rtl.module("Web",["System","Types","JS"],function () {
-  "use strict";
-  var $mod = this;
-});
-rtl.module("webaudio",["System","SysUtils","JS","Web","Types"],function () {
-  "use strict";
-  var $mod = this;
-});
 rtl.module("audio",["System","Classes","contnrs","SysUtils","webaudio","JS","Web"],function () {
   "use strict";
   var $mod = this;
@@ -2874,7 +3245,7 @@ rtl.module("audio",["System","Classes","contnrs","SysUtils","webaudio","JS","Web
       pas.System.TObject.Destroy.call(this);
     };
   });
-  this.Player = null;
+  this.MusicPlayer = null;
   $mod.$implcode = function () {
     $impl.Lerp = function (T, a, b, y0, y1) {
       var Result = 0.0;
@@ -2894,10 +3265,10 @@ rtl.module("audio",["System","Classes","contnrs","SysUtils","webaudio","JS","Web
     };
   };
   $mod.$init = function () {
-    $mod.Player = $mod.TMusicPlayer.$create("Create$1");
+    $mod.MusicPlayer = $mod.TMusicPlayer.$create("Create$1");
   };
 },[]);
-rtl.module("audiostuff",["System","Classes","SysUtils","JS","audio"],function () {
+rtl.module("audiostuff",["System","Classes","SysUtils","JS","Web","audio"],function () {
   "use strict";
   var $mod = this;
   rtl.createClass(this,"TSample",pas.audio.TInstrument,function () {
@@ -2940,6 +3311,10 @@ rtl.module("audiostuff",["System","Classes","SysUtils","JS","audio"],function ()
         ph = ph + sampleStep;
         Index = Math.round(ph);
         if (Index >= this.fSamples.length) {
+          if (!this.fLoop) {
+            ANote.Done = true;
+            break;
+          };
           wrappedIndex = Index % this.fSamples.length;
           ph = ph - (Index - wrappedIndex);
           Index = wrappedIndex;
@@ -2957,272 +3332,906 @@ rtl.module("audiostuff",["System","Classes","SysUtils","JS","audio"],function ()
       return this;
     };
   });
-},[]);
-rtl.module("program",["System","JS","fpjson","Classes","SysUtils","Web","webaudio","audio","audiostuff"],function () {
+},["Math"]);
+rtl.module("GameMath",["System","Classes","SysUtils","Math"],function () {
   "use strict";
   var $mod = this;
-  this.refill = function () {
-    pas.audio.Player.Update();
-    window.setTimeout(rtl.createSafeCallback($mod,"refill"),1);
-  };
-  this.tone = null;
-  this.bass = null;
-  this.noteMap = null;
-  this.ChordToNote = function (s) {
-    var Result = 0.0;
-    var $tmp = s;
-    if ($tmp === "c1") {
-      return 261.63}
-     else if ($tmp === "d1") {
-      return 293.66}
-     else if ($tmp === "e1") {
-      return 329.63}
-     else if ($tmp === "f1") {
-      return 349.23}
-     else if ($tmp === "g1") {
-      return 392.00}
-     else if ($tmp === "a1") {
-      return 440.00}
-     else if ($tmp === "h1") {
-      return 493.88}
-     else if ($tmp === "c2") {
-      return 261.63 * 2}
-     else if ($tmp === "d2") {
-      return 293.66 * 2}
-     else if ($tmp === "e2") {
-      return 329.63 * 2}
-     else if ($tmp === "f2") {
-      return 349.23 * 2}
-     else if ($tmp === "g2") {
-      return 392.00 * 2}
-     else if ($tmp === "a2") {
-      return 440.00 * 2}
-     else if ($tmp === "h2") {
-      return 493.88 * 2}
-     else if ($tmp === "c3") {
-      return 261.63 * 4}
-     else if ($tmp === "d3") {
-      return 293.66 * 4}
-     else if ($tmp === "e3") {
-      return 329.63 * 4}
-     else if ($tmp === "f3") {
-      return 349.23 * 4}
-     else if ($tmp === "g3") {
-      return 392.00 * 4}
-     else if ($tmp === "a3") {
-      return 440.00 * 4}
-     else if ($tmp === "h3") {
-      return 493.88 * 4}
-     else {
-      Result = 0;
-    };
-    return Result;
-  };
-  this.KeyToChord = function (s) {
-    var Result = "";
-    var $tmp = s;
-    if ($tmp === "z") {
-      return "c1"}
-     else if ($tmp === "x") {
-      return "d1"}
-     else if ($tmp === "c") {
-      return "e1"}
-     else if ($tmp === "v") {
-      return "f1"}
-     else if ($tmp === "b") {
-      return "g1"}
-     else if ($tmp === "n") {
-      return "a1"}
-     else if ($tmp === "m") {
-      return "h1"}
-     else if ($tmp === "s") {
-      return "c2"}
-     else if ($tmp === "d") {
-      return "d2"}
-     else if ($tmp === "f") {
-      return "e2"}
-     else if ($tmp === "g") {
-      return "f2"}
-     else if ($tmp === "h") {
-      return "g2"}
-     else if ($tmp === "j") {
-      return "a2"}
-     else if ($tmp === "k") {
-      return "h2"}
-     else if ($tmp === "e") {
-      return "c3"}
-     else if ($tmp === "r") {
-      return "d3"}
-     else if ($tmp === "t") {
-      return "e3"}
-     else if ($tmp === "y") {
-      return "f3"}
-     else if ($tmp === "u") {
-      return "g3"}
-     else if ($tmp === "i") {
-      return "a3"}
-     else if ($tmp === "o") {
-      return "h3"}
-     else {
-      Result = " ";
-    };
-    return Result;
-  };
-  this.play = function (inst, prog, start, spacing) {
-    var note = null;
-    var ch = "";
-    var chord = "";
-    var skip = false;
-    var i = 0;
-    skip = false;
-    for (var $l = 1, $end = prog.length; $l <= $end; $l++) {
-      i = $l;
-      if (skip) {
-        skip = false;
-        continue;
-      };
-      ch = prog.charAt(i - 1);
-      if (ch === ".") {
-        if (note !== null) {
-          note.StopTime = start + ((i - 2) * spacing);
-          note = null;
-        };
-      } else if (ch !== "-") {
-        chord = ch + prog.charAt((i + 1) - 1);
-        skip = true;
-        note = pas.audio.Player.AddNote(pas.audio.TNote.$create("Create$1",[$mod.ChordToNote(chord),start + ((i - 1) * spacing),start + ((i + 1) * spacing),inst]));
-      };
-    };
-  };
-  rtl.recNewT(this,"TChord",function () {
-    this.Name = "";
-    this.$new = function () {
-      var r = Object.create(this);
-      r.Notes = [];
-      return r;
-    };
+  rtl.recNewT(this,"TPVector",function () {
+    this.X = 0.0;
+    this.Y = 0.0;
     this.$eq = function (b) {
-      return (this.Name === b.Name) && (this.Notes === b.Notes);
+      return (this.X === b.X) && (this.Y === b.Y);
     };
     this.$assign = function (s) {
-      this.Name = s.Name;
-      this.Notes = rtl.arrayRef(s.Notes);
+      this.X = s.X;
+      this.Y = s.Y;
+      return this;
+    };
+    this.New = function (AX, AY) {
+      var Result = $mod.TPVector.$new();
+      Result.X = AX;
+      Result.Y = AY;
+      return Result;
+    };
+  });
+});
+rtl.module("guibase",["System","Web","GameBase","Classes","SysUtils"],function () {
+  "use strict";
+  var $mod = this;
+  rtl.createClass(this,"TGUIElement",pas.GameBase.TGameElement,function () {
+    this.$init = function () {
+      pas.GameBase.TGameElement.$init.call(this);
+      this.fHeight = 0;
+      this.fHitTestVisible = false;
+      this.fParent = null;
+      this.fVisible = false;
+      this.fWidth = 0;
+      this.fChildren = null;
+    };
+    this.$final = function () {
+      this.fParent = undefined;
+      this.fChildren = undefined;
+      pas.GameBase.TGameElement.$final.call(this);
+    };
+    this.Render = function (AContext) {
+      var i = 0;
+      AContext.save();
+      AContext.translate(this.fPosition.X,this.fPosition.Y);
+      for (var $l = 0, $end = this.fChildren.GetCount() - 1; $l <= $end; $l++) {
+        i = $l;
+        rtl.getObject(this.fChildren.Get(i)).Render(AContext);
+      };
+      AContext.restore();
+    };
+    this.Create$1 = function () {
+      pas.System.TObject.Create.call(this);
+      this.fChildren = pas.Classes.TList.$create("Create$1");
+      this.fVisible = true;
+      this.fHitTestVisible = true;
+      return this;
+    };
+    this.Destroy = function () {
+      var i = 0;
+      for (var $l = 0, $end = this.fChildren.GetCount() - 1; $l <= $end; $l++) {
+        i = $l;
+        rtl.getObject(this.fChildren.Get(i)).$destroy("Destroy");
+      };
+      rtl.free(this,"fChildren");
+      pas.System.TObject.Destroy.call(this);
+    };
+    this.AddChild = function (AChild) {
+      AChild.fParent = this;
+      this.fChildren.Add(AChild);
+    };
+  });
+});
+rtl.module("guictrls",["System","guibase","Web"],function () {
+  "use strict";
+  var $mod = this;
+  rtl.createClass(this,"TGUIPanel",pas.guibase.TGUIElement,function () {
+    this.$init = function () {
+      pas.guibase.TGUIElement.$init.call(this);
+      this.fBackGround = "";
+    };
+    this.Render = function (AContext) {
+      if (this.fBackGround !== "") {
+        AContext.save();
+        AContext.fillStyle = this.fBackGround;
+        AContext.fillRect(this.fPosition.X,this.fPosition.Y,this.fWidth,this.fHeight);
+        AContext.restore();
+      };
+      pas.guibase.TGUIElement.Render.call(this,AContext);
+    };
+    this.Create$2 = function () {
+      pas.guibase.TGUIElement.Create$1.call(this);
+      this.fBackGround = "rgb(0,0,0,0.0)";
       return this;
     };
   });
-  this.playCh = function (inst, prog, start, spacing, Chords) {
-    var notes = null;
-    var ch = "";
-    var i = 0;
-    var i2 = 0;
-    var chord = "";
-    var n = "";
-    var note = undefined;
-    notes = pas.Classes.TList.$create("Create$1");
-    for (var $l = 1, $end = prog.length; $l <= $end; $l++) {
-      i = $l;
-      ch = prog.charAt(i - 1);
-      if (ch === ".") {
-        if (notes.GetCount() > 0) {
-          var $in = notes.GetEnumerator();
-          try {
-            while ($in.MoveNext()) {
-              note = $in.GetCurrent();
-              rtl.getObject(note).StopTime = start + ((i - 2) * spacing);
-            }
-          } finally {
-            $in = rtl.freeLoc($in)
-          };
-          notes.Clear();
+  this.TGUILabelVAlign = {"0": "vaTop", vaTop: 0, "1": "vaMiddle", vaMiddle: 1, "2": "vaBottom", vaBottom: 2};
+  this.TGUILabelHAlign = {"0": "haLeft", haLeft: 0, "1": "haMiddle", haMiddle: 1, "2": "haRight", haRight: 2};
+  rtl.createClass(this,"TGUILabel",pas.guibase.TGUIElement,function () {
+    this.$init = function () {
+      pas.guibase.TGUIElement.$init.call(this);
+      this.fCaption = "";
+      this.fFormat = "";
+      this.fFont = "";
+      this.fHAlign = 0;
+      this.fSize = 0;
+      this.fVAlign = 0;
+    };
+    this.SetSize = function (AValue) {
+      if (this.fSize === AValue) return;
+      this.fSize = AValue;
+      this.fFormat = pas.SysUtils.Format("%dpx %s",[this.fSize,this.fFont]);
+    };
+    this.Render = function (AContext) {
+      var measurement = null;
+      var ly = 0.0;
+      var lx = 0.0;
+      AContext.save();
+      var $tmp = this.fVAlign;
+      if ($tmp === 0) {
+        ly = this.fPosition.Y;
+        AContext.textBaseline = "top";
+      } else if ($tmp === 1) {
+        ly = this.fPosition.Y + (this.fHeight / 2);
+        AContext.textBaseline = "middle";
+      } else if ($tmp === 2) {
+        ly = this.fPosition.Y + this.fHeight;
+        AContext.textBaseline = "bottom";
+      };
+      AContext.font = this.fFormat;
+      measurement = AContext.measureText(this.fCaption);
+      var $tmp1 = this.fHAlign;
+      if ($tmp1 === 0) {
+        lx = this.fPosition.X}
+       else if ($tmp1 === 1) {
+        lx = this.fPosition.X + ((this.fWidth - measurement.width) / 2)}
+       else if ($tmp1 === 2) lx = (this.fPosition.X + this.fWidth) - measurement.width;
+      AContext.fillText(this.fCaption,lx,ly);
+      AContext.restore();
+      pas.guibase.TGUIElement.Render.call(this,AContext);
+    };
+    this.Create$2 = function () {
+      pas.guibase.TGUIElement.Create$1.call(this);
+      this.fFont = "sans";
+      this.fSize = 12;
+      this.fVAlign = 1;
+      this.fHAlign = 1;
+      return this;
+    };
+  });
+  rtl.createClass(this,"TGUIProgressBar",pas.guibase.TGUIElement,function () {
+    this.$init = function () {
+      pas.guibase.TGUIElement.$init.call(this);
+      this.fBackground = "";
+      this.fBorder = "";
+      this.fBorderWidth = 0.0;
+      this.fForeground = "";
+      this.fMax = 0.0;
+      this.fMin = 0.0;
+      this.fValue = 0.0;
+    };
+    this.Render = function (AContext) {
+      var bw2 = 0.0;
+      var w = 0.0;
+      AContext.save();
+      if (this.fBackground !== "") {
+        AContext.fillStyle = this.fBackground;
+        AContext.fillRect(this.fPosition.X,this.fPosition.Y,this.fWidth,this.fHeight);
+      };
+      if (this.fMax > this.fMin) {
+        w = (this.fValue - this.fMin) / (this.fMax - this.fMin);
+        if (w > 1) w = 1;
+        if (w > 0) {
+          AContext.fillStyle = this.fForeground;
+          AContext.fillRect(this.fPosition.X,this.fPosition.Y,w * this.fWidth,this.fHeight);
         };
-      } else if (ch !== "-") {
-        chord = ch;
-        for (var $l1 = 0, $end1 = rtl.length(Chords) - 1; $l1 <= $end1; $l1++) {
-          i2 = $l1;
-          if (Chords[i2].Name === chord) {
-            for (var $in1 = Chords[i2].Notes, $l2 = 0, $end2 = rtl.length($in1) - 1; $l2 <= $end2; $l2++) {
-              n = $in1[$l2];
-              notes.Add(pas.audio.Player.AddNote(pas.audio.TNote.$create("Create$1",[$mod.ChordToNote(n),start + ((i - 1) * spacing),start + ((i + 1) * spacing),inst])));
-            };
-            break;
-          };
+      };
+      if ((this.fBorderWidth > 0) && (this.fBorder !== "")) {
+        AContext.strokeStyle = this.fBorder;
+        AContext.lineWidth = this.fBorderWidth;
+        bw2 = this.fBorderWidth / 2;
+        AContext.strokeRect(this.fPosition.X + bw2,this.fPosition.Y + bw2,this.fWidth - this.fBorderWidth,this.fHeight - this.fBorderWidth);
+      };
+      AContext.restore();
+      pas.guibase.TGUIElement.Render.call(this,AContext);
+    };
+  });
+},["SysUtils"]);
+rtl.module("Resources",["System","Classes","SysUtils","JS","Web"],function () {
+  "use strict";
+  var $mod = this;
+  var $impl = $mod.$impl;
+  this.TResourceType = {"0": "rtText", rtText: 0, "1": "rtArrayBuffer", rtArrayBuffer: 1, "2": "rtBlob", rtBlob: 2};
+  rtl.createClass(this,"TResources",pas.System.TObject,function () {
+    this.AddResource = function (APath, AType) {
+      var $Self = this;
+      var res = null;
+      res = $impl.TResource.$create("Create");
+      res.ResType = AType;
+      $impl.fResources.AddObject(APath,res);
+      $impl.fTotal += 1;
+      $impl.DoFetch(APath).then(function (x) {
+        var Result = undefined;
+        pas.System.Writeln("Got ",APath);
+        var $tmp = AType;
+        if ($tmp === 0) {
+          rtl.getObject(x).text().then(function (y) {
+            var Result = undefined;
+            res.Text = "" + y;
+            $impl.fTotalLoaded += 1;
+            return Result;
+          })}
+         else if ($tmp === 2) {
+          rtl.getObject(x).blob().then(function (y) {
+            var Result = undefined;
+            res.Data = rtl.getObject(y);
+            $impl.fTotalLoaded += 1;
+            return Result;
+          })}
+         else if ($tmp === 1) rtl.getObject(x).arrayBuffer().then(function (y) {
+          var Result = undefined;
+          res.ArrayBuf = rtl.getObject(y);
+          $impl.fTotalLoaded += 1;
+          return Result;
+        });
+        return Result;
+      });
+    };
+    this.GetArrayBuffer = function (APath) {
+      var Result = null;
+      var idx = 0;
+      idx = $impl.fResources.IndexOf(APath);
+      Result = $impl.fResources.GetObject(idx).ArrayBuf;
+      return Result;
+    };
+    this.Completed = function () {
+      var Result = false;
+      Result = $impl.fTotal === $impl.fTotalLoaded;
+      return Result;
+    };
+    this.Total = function () {
+      var Result = 0;
+      Result = $impl.fTotal;
+      return Result;
+    };
+    this.TotalLoaded = function () {
+      var Result = 0;
+      Result = $impl.fTotalLoaded;
+      return Result;
+    };
+  });
+  $mod.$implcode = function () {
+    rtl.createClass($impl,"TResource",pas.System.TObject,function () {
+      this.$init = function () {
+        pas.System.TObject.$init.call(this);
+        this.ResType = 0;
+        this.Text = "";
+        this.ArrayBuf = null;
+        this.Data = null;
+      };
+      this.$final = function () {
+        this.ArrayBuf = undefined;
+        this.Data = undefined;
+        pas.System.TObject.$final.call(this);
+      };
+    });
+    $impl.fTotal = 0;
+    $impl.fTotalLoaded = 0;
+    $impl.fResources = null;
+    $impl.DoFetch = async function (APath) {
+      var Result = null;
+      Result = await window.fetch(APath);
+      if (!Result.ok) window.console.error("HTTP error! status: " + ("" + Result.status));
+      return Result;
+    };
+  };
+  $mod.$init = function () {
+    $impl.fResources = pas.Classes.TStringList.$create("Create$1");
+    $impl.fResources.SetCaseSensitive(false);
+    $impl.fResources.SetSorted(false);
+    $impl.fResources.FStrictDelimiter = true;
+  };
+},[]);
+rtl.module("GameBase",["System","Web","audio","GameMath","SysUtils","Classes","contnrs"],function () {
+  "use strict";
+  var $mod = this;
+  var $impl = $mod.$impl;
+  rtl.createClass(this,"TGameElement",pas.System.TObject,function () {
+    this.$init = function () {
+      pas.System.TObject.$init.call(this);
+      this.fPosition = pas.GameMath.TPVector.$new();
+      this.fTime = 0.0;
+    };
+    this.$final = function () {
+      this.fPosition = undefined;
+      pas.System.TObject.$final.call(this);
+    };
+    this.Update = function (AGame, ATimeMS) {
+      this.fTime = ATimeMS;
+    };
+    this.Render = function (AContext) {
+    };
+  });
+  rtl.createClass(this,"TGameTransform",pas.System.TObject,function () {
+    this.$init = function () {
+      pas.System.TObject.$init.call(this);
+      this.fScale = 0.0;
+      this.fX = 0.0;
+      this.fY = 0.0;
+    };
+    this.GetMatrix = function () {
+      var Result = rtl.arraySetLength(null,0.0,6);
+      Result[0] = this.fScale;
+      Result[1] = 0;
+      Result[2] = 0;
+      Result[3] = this.fScale;
+      Result[4] = this.fX;
+      Result[5] = this.fY;
+      return Result;
+    };
+  });
+  rtl.createClass(this,"TGamePlane",pas.System.TObject,function () {
+    this.$init = function () {
+      pas.System.TObject.$init.call(this);
+      this.fTransform = null;
+      this.Elements = null;
+      this.ZIndex = 0;
+      this.Visible = false;
+    };
+    this.$final = function () {
+      this.fTransform = undefined;
+      this.Elements = undefined;
+      pas.System.TObject.$final.call(this);
+    };
+    this.Create$1 = function () {
+      pas.System.TObject.Create.call(this);
+      this.fTransform = null;
+      this.Elements = pas.Classes.TList.$create("Create$1");
+      return this;
+    };
+  });
+  this.TGameBaseState = {"0": "bsStart", bsStart: 0, "1": "bsWaitResources", bsWaitResources: 1, "2": "bsWaitClick", bsWaitClick: 2, "3": "bsDone", bsDone: 3};
+  this.TGameMouseState = {"0": "msUp", msUp: 0, "1": "msDragging", msDragging: 1, "2": "msDown", msDown: 2};
+  rtl.createClass(this,"TGameBase",pas.System.TObject,function () {
+    this.$init = function () {
+      pas.System.TObject.$init.call(this);
+      this.fHeight = 0;
+      this.fWidth = 0;
+      this.fMouseStartY = 0.0;
+      this.fMouseStartX = 0.0;
+      this.fToFree = null;
+      this.fPlanes = null;
+      this.fState = 0;
+      this.fMouseState = 0;
+      this.fUserInteracted = false;
+      this.fEvtHandler = undefined;
+      this.Canvas = null;
+      this.Ctx = null;
+    };
+    this.$final = function () {
+      this.fToFree = undefined;
+      this.fPlanes = undefined;
+      this.Canvas = undefined;
+      this.Ctx = undefined;
+      pas.System.TObject.$final.call(this);
+    };
+    this.OnCanvasKeyPress = function (aEvent) {
+      var Result = false;
+      if (this.fState === 3) this.DoKeyPress(aEvent.key);
+      aEvent.stopPropagation();
+      aEvent.preventDefault();
+      Result = false;
+      return Result;
+    };
+    this.OnCanvasKeyUp = function (aEvent) {
+      var Result = false;
+      aEvent.stopPropagation();
+      aEvent.preventDefault();
+      Result = false;
+      return Result;
+    };
+    this.OnCanvasLeave = function (aEvent) {
+      var Result = false;
+      if (this.fMouseState === 1) {
+        this.fMouseState = 0;
+        this.DoStopDrag();
+      };
+      Result = true;
+      return Result;
+    };
+    this.OnCanvasMouseDown = function (aEvent) {
+      var Result = false;
+      Result = true;
+      if (this.fState === 3) {
+        if (aEvent.button === 0) {
+          this.fMouseStartX = aEvent.clientX;
+          this.fMouseStartY = aEvent.clientY;
+          this.fMouseState = 2;
+        };
+      };
+      return Result;
+    };
+    this.OnCanvasMouseUp = function (aEvent) {
+      var Result = false;
+      if (this.fMouseState !== 0) {
+        if (this.fMouseState === 1) {
+          this.DoStopDrag()}
+         else this.DoClick(aEvent.clientX,aEvent.clientY,aEvent.buttons);
+        this.fMouseState = 0;
+      };
+      Result = true;
+      return Result;
+    };
+    this.OnCanvasMove = function (aEvent) {
+      var Result = false;
+      if (this.fState === 3) {
+        if ((this.fMouseState === 2) && (pas.System.Sqr(10) <= (pas.System.Sqr$1(aEvent.clientX - this.fMouseStartX) + pas.System.Sqr$1(aEvent.clientY - this.fMouseStartY)))) {
+          this.fMouseState = 1;
+          this.DoStartDrag(this.fMouseStartX,this.fMouseStartY);
+        } else this.DoMove(aEvent.clientX,aEvent.clientY);
+      };
+      Result = true;
+      return Result;
+    };
+    this.OnCanvasWheel = function (aEvent) {
+      var Result = false;
+      if (this.fState === 3) this.DoWheel(aEvent.deltaY);
+      Result = true;
+      return Result;
+    };
+    this.OnResize = function (Event) {
+      var Result = false;
+      this.fWidth = window.innerWidth;
+      this.fHeight = window.innerHeight;
+      this.Canvas.width = this.fWidth;
+      this.Canvas.height = this.fHeight;
+      pas.System.Writeln("Resize: ",this.fWidth,"x",this.fHeight);
+      this.AfterResize();
+      return Result;
+    };
+    this.OnRequestFrame = function (aTime) {
+      var fWaitClickLbl = null;
+      this.Ctx.clearRect(0,0,this.fWidth,this.fHeight);
+      var $tmp = this.fState;
+      if ($tmp === 1) {
+        this.Ctx.textBaseline = "middle";
+        this.Ctx.fillText(pas.SysUtils.Format("Loading resources: %d out of %d done",[pas.Resources.TResources.TotalLoaded(),pas.Resources.TResources.Total()]),0,0);
+        if (pas.Resources.TResources.Completed()) {
+          this.AfterLoad();
+          this.fState = 2;
+        };
+      } else if ($tmp === 2) {
+        if (this.fUserInteracted) {
+          this.fState = 3;
+        } else {
+          fWaitClickLbl = $impl.THackerLabel.$create("Create$2");
+          fWaitClickLbl.fPosition.$assign(pas.GameMath.TPVector.New(0,0));
+          fWaitClickLbl.SetSize(50);
+          fWaitClickLbl.fWidth = this.Canvas.width;
+          fWaitClickLbl.fHeight = this.Canvas.height;
+          fWaitClickLbl.fVAlign = 1;
+          fWaitClickLbl.fHAlign = 1;
+          fWaitClickLbl.fCaption = "Click to start game";
+          fWaitClickLbl.DoRender(this.Ctx);
+          fWaitClickLbl = rtl.freeLoc(fWaitClickLbl);
+        };
+      } else if ($tmp === 3) {
+        this.Update(aTime);
+        this.Render();
+      };
+      window.requestAnimationFrame(rtl.createCallback(this,"OnRequestFrame"));
+    };
+    this.UserInteraction = function () {
+      document.body.removeEventListener("click",this.fEvtHandler);
+      document.body.removeEventListener("scroll",this.fEvtHandler);
+      document.body.removeEventListener("keydown",this.fEvtHandler);
+      this.fUserInteracted = true;
+    };
+    this.InitializeResources = function () {
+    };
+    this.AfterLoad = function () {
+    };
+    this.AfterResize = function () {
+    };
+    this.DoMove = function (AX, AY) {
+    };
+    this.DoWheel = function (AX) {
+    };
+    this.DoStopDrag = function () {
+    };
+    this.DoStartDrag = function (AX, AY) {
+    };
+    this.DoClick = function (AX, AY, AButtons) {
+    };
+    this.DoKeyPress = function (AKeyCode) {
+    };
+    this.Update = function (ATimeMS) {
+      var plane = null;
+      var i = 0;
+      var el = undefined;
+      this.fPlanes.Sort($impl.SortPlanes);
+      pas.audio.MusicPlayer.Update();
+      for (var $l = 0, $end = this.fPlanes.GetCount() - 1; $l <= $end; $l++) {
+        i = $l;
+        plane = rtl.getObject(this.fPlanes.Get(i));
+        var $in = plane.Elements.GetEnumerator();
+        try {
+          while ($in.MoveNext()) {
+            el = $in.GetCurrent();
+            rtl.getObject(el).Update(this,ATimeMS);
+          }
+        } finally {
+          $in = rtl.freeLoc($in)
+        };
+      };
+      for (var $l1 = 0, $end1 = this.fToFree.GetCount() - 1; $l1 <= $end1; $l1++) {
+        i = $l1;
+        rtl.getObject(this.fToFree.Get(i)).$destroy("Destroy");
+      };
+      this.fToFree.Clear();
+    };
+    this.Render = function () {
+      var plane = null;
+      var i = 0;
+      var el = undefined;
+      var mtx = rtl.arraySetLength(null,0.0,6);
+      var doRestore = false;
+      for (var $l = 0, $end = this.fPlanes.GetCount() - 1; $l <= $end; $l++) {
+        i = $l;
+        plane = rtl.getObject(this.fPlanes.Get(i));
+        if (!plane.Visible) continue;
+        if (plane.fTransform !== null) {
+          this.Ctx.save();
+          mtx = plane.fTransform.GetMatrix();
+          this.Ctx.setTransform(mtx[0],mtx[1],mtx[2],mtx[3],mtx[4],mtx[5]);
+          doRestore = true;
+        } else doRestore = false;
+        var $in = plane.Elements.GetEnumerator();
+        try {
+          while ($in.MoveNext()) {
+            el = $in.GetCurrent();
+            rtl.getObject(el).Render(this.Ctx);
+          }
+        } finally {
+          $in = rtl.freeLoc($in)
+        };
+        if (doRestore) this.Ctx.restore();
+      };
+    };
+    this.AddPlane = function (AZIndex, AVisible) {
+      var Result = null;
+      Result = $mod.TGamePlane.$create("Create$1");
+      Result.Visible = AVisible;
+      Result.ZIndex = AZIndex;
+      this.fPlanes.Add(Result);
+      return Result;
+    };
+    this.AddElement = function (AElement, ALayer) {
+      ALayer.Elements.Add(AElement);
+    };
+    this.Create$1 = function () {
+      var $Self = this;
+      pas.System.TObject.Create.call(this);
+      this.fToFree = pas.Classes.TList.$create("Create$1");
+      this.fState = 0;
+      this.fPlanes = pas.contnrs.TObjectList.$create("Create$3",[true]);
+      this.Canvas = rtl.asExt(document.getElementById("c"),HTMLCanvasElement);
+      this.Ctx = rtl.asExt(this.Canvas.getContext("2d"),CanvasRenderingContext2D);
+      this.fEvtHandler = rtl.createCallback($Self,"UserInteraction");
+      document.body.addEventListener("click",this.fEvtHandler);
+      document.body.addEventListener("scroll",this.fEvtHandler);
+      document.body.addEventListener("keydown",this.fEvtHandler);
+      this.Canvas.onmousedown = rtl.createSafeCallback($Self,"OnCanvasMouseDown");
+      this.Canvas.onmouseup = rtl.createSafeCallback($Self,"OnCanvasMouseUp");
+      this.Canvas.onmousemove = rtl.createSafeCallback($Self,"OnCanvasMove");
+      this.Canvas.onwheel = rtl.createSafeCallback($Self,"OnCanvasWheel");
+      this.Canvas.onmouseleave = rtl.createSafeCallback($Self,"OnCanvasLeave");
+      window.onkeydown = rtl.createSafeCallback($Self,"OnCanvasKeyPress");
+      window.onkeyup = rtl.createSafeCallback($Self,"OnCanvasKeyUp");
+      window.onresize = function (aEvent) {
+        var Result = false;
+        $Self.OnResize(null);
+        return Result;
+      };
+      this.OnResize(null);
+      this.InitializeResources();
+      this.fState = 1;
+      return this;
+    };
+    this.Run = function () {
+      window.requestAnimationFrame(rtl.createCallback(this,"OnRequestFrame"));
+    };
+  });
+  $mod.$implcode = function () {
+    $impl.DragStart = 10;
+    rtl.createClass($impl,"THackerLabel",pas.guictrls.TGUILabel,function () {
+      this.DoRender = function (AContext) {
+        this.Render(AContext);
+      };
+    });
+    $impl.SortPlanes = function (Item1, Item2) {
+      var Result = 0;
+      Result = rtl.getObject(Item1).ZIndex - rtl.getObject(Item2).ZIndex;
+      return Result;
+    };
+  };
+},["guictrls","Resources"]);
+rtl.module("program",["System","JS","Classes","SysUtils","Math","Web","webaudio","audio","audiostuff","GameMath","GameBase","Resources","guibase","guictrls"],function () {
+  "use strict";
+  var $mod = this;
+  this.TRoundStatus = {"0": "rsLoading", rsLoading: 0, "1": "rsLoaded", rsLoaded: 1, "2": "rsStarting", rsStarting: 2, "3": "rsGoing", rsGoing: 3, "4": "rsEnded", rsEnded: 4};
+  rtl.recNewT(this,"TRound",function () {
+    this.State = 0;
+    this.Word = "";
+    this.Buffer = "";
+    this.InputSequence = "";
+    this.StartTime = 0.0;
+    this.StopTime = 0.0;
+    this.Mistypes = 0;
+    this.Correct = 0;
+    this.$eq = function (b) {
+      return (this.State === b.State) && (this.Word === b.Word) && (this.Buffer === b.Buffer) && (this.InputSequence === b.InputSequence) && (this.StartTime === b.StartTime) && (this.StopTime === b.StopTime) && (this.Mistypes === b.Mistypes) && (this.Correct === b.Correct);
+    };
+    this.$assign = function (s) {
+      this.State = s.State;
+      this.Word = s.Word;
+      this.Buffer = s.Buffer;
+      this.InputSequence = s.InputSequence;
+      this.StartTime = s.StartTime;
+      this.StopTime = s.StopTime;
+      this.Mistypes = s.Mistypes;
+      this.Correct = s.Correct;
+      return this;
+    };
+  });
+  rtl.createClass(this,"TLD50",pas.GameBase.TGameBase,function () {
+    this.$init = function () {
+      pas.GameBase.TGameBase.$init.call(this);
+      this.gameLayer = null;
+      this.prepLayer = null;
+      this.postLayer = null;
+      this.statusLbl = null;
+      this.instructionLbl = rtl.arraySetLength(null,null,3);
+      this.prepPnl = null;
+      this.prepLbl2 = null;
+      this.prepLbl = null;
+      this.charLbl = null;
+      this.targetLbl = null;
+      this.winsLbl = null;
+      this.infoPnl = null;
+      this.roundProgress = null;
+      this.rnd = $mod.TRound.$new();
+      this.lastTime = 0.0;
+      this.bass = null;
+    };
+    this.$final = function () {
+      this.gameLayer = undefined;
+      this.prepLayer = undefined;
+      this.postLayer = undefined;
+      this.statusLbl = undefined;
+      this.instructionLbl = undefined;
+      this.prepPnl = undefined;
+      this.prepLbl2 = undefined;
+      this.prepLbl = undefined;
+      this.charLbl = undefined;
+      this.targetLbl = undefined;
+      this.winsLbl = undefined;
+      this.infoPnl = undefined;
+      this.roundProgress = undefined;
+      this.rnd = undefined;
+      this.bass = undefined;
+      pas.GameBase.TGameBase.$final.call(this);
+    };
+    this.StartRound = function (ATarget, ACurrentTime, APreRunTime, ARoundLength) {
+      this.rnd.Word = ATarget;
+      this.rnd.Buffer = ">";
+      this.rnd.InputSequence = "";
+      this.rnd.Mistypes = 0;
+      this.rnd.Correct = 0;
+      this.rnd.StartTime = ACurrentTime + (APreRunTime * 1e3);
+      this.rnd.StopTime = ACurrentTime + ((APreRunTime + ARoundLength) * 1e3);
+      this.rnd.State = 2;
+      this.charLbl.fCaption = this.rnd.Buffer;
+      this.targetLbl.fCaption = pas.SysUtils.Format(">%s<",[ATarget]);
+      this.roundProgress.fMin = ACurrentTime + (APreRunTime * 1e3);
+      this.roundProgress.fMax = ACurrentTime + ((APreRunTime + ARoundLength) * 1e3);
+      this.roundProgress.fValue = 0;
+      this.prepLayer.Visible = true;
+      this.gameLayer.Visible = false;
+      this.postLayer.Visible = false;
+      this.prepLbl2.fCaption = pas.SysUtils.Format("%4.3f",[(APreRunTime * 1e3) / 1000]);
+    };
+    this.EndRound = function () {
+      this.statusLbl.fCaption = pas.SysUtils.Format("Correct: %d",[this.rnd.Correct]);
+    };
+    this.AddMatch = function () {
+      this.rnd.Correct += 1;
+      this.winsLbl.fCaption = pas.SysUtils.Format("Correct: %d",[this.rnd.Correct]);
+      pas.audio.MusicPlayer.AddNote(pas.audio.TNote.$create("Create$1",[440 + (20 * this.rnd.Correct),pas.audio.MusicPlayer.GetTime() + 0.05,pas.audio.MusicPlayer.GetTime() + 0.30,this.bass]));
+    };
+    this.AddMiss = function (AKeyCode) {
+      this.rnd.Mistypes += 1;
+    };
+    this.SubmitScore = function () {
+      document.getElementsByName("run_score").item(0).value = pas.SysUtils.IntToStr(this.rnd.Correct);
+      document.getElementsByName("run_sequence").item(0).value = this.rnd.InputSequence;
+      document.getElementById("submit_form").submit();
+    };
+    this.InitializeResources = function () {
+      pas.Resources.TResources.AddResource("\/ld50\/samples\/bass.raw",1);
+    };
+    var instructionCaptions = ["Retry: F5","Submit score: Enter","Exit to menu: Escape"];
+    this.AfterLoad = function () {
+      var i = 0;
+      this.bass = pas.audio.MusicPlayer.AddInstrument(pas.audiostuff.TSample.$create("Create$2",[2200,44100,new Float32Array(pas.Resources.TResources.GetArrayBuffer("\/ld50\/samples\/bass.raw")),false]));
+      this.bass.DefaultADSR.Attack = 0.005;
+      this.bass.DefaultADSR.Decay = 0.005;
+      this.bass.DefaultADSR.Sustain = 0.2;
+      this.bass.DefaultADSR.Release = 0.3;
+      this.gameLayer = this.AddPlane(0,true);
+      this.prepLayer = this.AddPlane(1,true);
+      this.postLayer = this.AddPlane(1,false);
+      this.charLbl = pas.guictrls.TGUILabel.$create("Create$2");
+      this.charLbl.SetSize(72);
+      this.charLbl.fWidth = this.Canvas.width;
+      this.charLbl.fHeight = this.Canvas.height;
+      this.charLbl.fHAlign = 2;
+      this.charLbl.fVAlign = 1;
+      this.charLbl.fCaption = "test";
+      this.AddElement(this.charLbl,this.gameLayer);
+      this.targetLbl = pas.guictrls.TGUILabel.$create("Create$2");
+      this.targetLbl.SetSize(50);
+      this.targetLbl.fPosition.Y = Math.round(this.Canvas.height / 10);
+      this.targetLbl.fWidth = this.Canvas.width;
+      this.targetLbl.fHeight = Math.round(this.Canvas.height / 5);
+      this.targetLbl.fHAlign = 1;
+      this.targetLbl.fVAlign = 1;
+      this.targetLbl.fCaption = "><";
+      this.AddElement(this.targetLbl,this.gameLayer);
+      this.winsLbl = pas.guictrls.TGUILabel.$create("Create$2");
+      this.winsLbl.SetSize(48);
+      this.winsLbl.fWidth = Math.round(this.Canvas.width / 3);
+      this.winsLbl.fHeight = Math.round(this.Canvas.height / 10);
+      this.winsLbl.fHAlign = 0;
+      this.winsLbl.fVAlign = 1;
+      this.winsLbl.fCaption = "Correct: 0";
+      this.infoPnl = pas.guictrls.TGUIPanel.$create("Create$2");
+      this.infoPnl.fWidth = this.Canvas.width;
+      this.infoPnl.fHeight = Math.round(this.Canvas.height / 10);
+      this.infoPnl.fBackGround = "#7bca92";
+      this.infoPnl.AddChild(this.winsLbl);
+      this.AddElement(this.infoPnl,this.gameLayer);
+      this.roundProgress = pas.guictrls.TGUIProgressBar.$create("Create$1");
+      this.roundProgress.fPosition.Y = Math.round(this.Canvas.height - (this.Canvas.height / 10));
+      this.roundProgress.fWidth = this.Canvas.width;
+      this.roundProgress.fHeight = pas.Math.Ceil(this.Canvas.height / 10);
+      this.roundProgress.fMin = 0;
+      this.roundProgress.fMax = 100;
+      this.roundProgress.fValue = 0;
+      this.roundProgress.fForeground = "#7bca92";
+      this.AddElement(this.roundProgress,this.gameLayer);
+      this.prepLbl = pas.guictrls.TGUILabel.$create("Create$2");
+      this.prepLbl.SetSize(72);
+      this.prepLbl.fWidth = this.Canvas.width;
+      this.prepLbl.fHeight = this.Canvas.height;
+      this.prepLbl.fHAlign = 1;
+      this.prepLbl.fVAlign = 1;
+      this.prepLbl.fCaption = "Get ready";
+      this.prepLbl2 = pas.guictrls.TGUILabel.$create("Create$2");
+      this.prepLbl2.SetSize(72);
+      this.prepLbl2.fPosition.Y = Math.round(this.Canvas.height - (this.Canvas.height / 10));
+      this.prepLbl2.fWidth = this.Canvas.width;
+      this.prepLbl2.fHeight = pas.Math.Ceil(this.Canvas.height / 10);
+      this.prepLbl2.fHAlign = 1;
+      this.prepLbl2.fVAlign = 1;
+      this.prepLbl2.fCaption = "0.000";
+      this.prepPnl = pas.guictrls.TGUIPanel.$create("Create$2");
+      this.prepPnl.fWidth = this.Canvas.width;
+      this.prepPnl.fHeight = this.Canvas.height;
+      this.prepPnl.AddChild(this.prepLbl);
+      this.prepPnl.AddChild(this.prepLbl2);
+      this.AddElement(this.prepPnl,this.prepLayer);
+      this.AddElement(this.prepLbl2,this.gameLayer);
+      this.statusLbl = pas.guictrls.TGUILabel.$create("Create$2");
+      this.statusLbl.SetSize(72);
+      this.statusLbl.fWidth = this.Canvas.width;
+      this.statusLbl.fHeight = this.Canvas.height;
+      this.statusLbl.fHAlign = 1;
+      this.statusLbl.fVAlign = 1;
+      this.statusLbl.fCaption = "Words: 0";
+      this.AddElement(this.statusLbl,this.postLayer);
+      for (i = 0; i <= 2; i++) {
+        this.instructionLbl[i] = pas.guictrls.TGUILabel.$create("Create$2");
+        this.instructionLbl[i].SetSize(50);
+        this.instructionLbl[i].fPosition.Y = (i + 7) * (this.Canvas.height / 10);
+        this.instructionLbl[i].fWidth = this.Canvas.width;
+        this.instructionLbl[i].fHeight = rtl.trunc(this.Canvas.height / 10);
+        this.instructionLbl[i].fHAlign = 1;
+        this.instructionLbl[i].fVAlign = 1;
+        this.instructionLbl[i].fCaption = instructionCaptions[i];
+        this.AddElement(this.instructionLbl[i],this.postLayer);
+      };
+      this.rnd.State = 1;
+    };
+    this.Update = function (ATimeMS) {
+      var target = "";
+      pas.GameBase.TGameBase.Update.call(this,ATimeMS);
+      this.lastTime = ATimeMS;
+      var $tmp = this.rnd.State;
+      if ($tmp === 1) {
+        target = document.getElementsByName("run_word").item(0).value;
+        this.StartRound(target,ATimeMS,3,20);
+      } else if ($tmp === 2) {
+        this.prepLbl2.fCaption = pas.SysUtils.Format("%4.3f",[(this.rnd.StartTime - ATimeMS) / 1000]);
+        if (ATimeMS >= this.rnd.StartTime) {
+          this.rnd.State = 3;
+          this.prepLayer.Visible = false;
+          this.gameLayer.Visible = true;
+          this.postLayer.Visible = false;
+        };
+      } else if ($tmp === 3) {
+        this.roundProgress.fValue = ATimeMS;
+        this.prepLbl2.fCaption = pas.SysUtils.Format("Remaining: %4.3f",[(this.rnd.StopTime - ATimeMS) / 1000]);
+        if (ATimeMS >= this.rnd.StopTime) {
+          this.EndRound();
+          this.rnd.State = 4;
+          this.prepLayer.Visible = false;
+          this.gameLayer.Visible = false;
+          this.postLayer.Visible = true;
         };
       };
     };
-    notes = rtl.freeLoc(notes);
-  };
-  this.Chord = function (name, notes) {
-    var Result = $mod.TChord.$new();
-    Result.Name = name;
-    Result.Notes = notes;
-    return Result;
-  };
-  this.keyDown = function (aEvent) {
-    var Result = false;
-    var note = null;
-    var x = 0.0;
-    var sp = 0.0;
-    var le = 0.0;
-    if (aEvent.key === "q") {
-      x = pas.audio.Player.GetTime();
-      sp = 0.33 / 4;
-      le = sp / 2;
-      $mod.play($mod.bass,"f1--....f2--....a2--....f1--....f2--....a2--....f1--....f2--...." + "c1--....c2--....e2--....c1--....c2--....e2--....c1--....c2--...." + "d1--....d2--....f2--....d1--....d2--....f2--....d1--....d2--...." + "d1--....d2--....f2--....d1--....d2--....f2--....c1--....c2--....",x,sp / 8);
-      $mod.playCh($mod.tone,"f-----------------------------------------------------------...." + "F-----------------------------------------------------------...." + "D---------------------------------------------------------------" + "----------------------------....c---------------------------....",x,sp / 8,[$mod.TChord.$clone($mod.Chord("f",["c3","f3","a3"])),$mod.TChord.$clone($mod.Chord("F",["c3","e3","a3"])),$mod.TChord.$clone($mod.Chord("D",["d3","f3","a3"])),$mod.TChord.$clone($mod.Chord("c",["c3","e3","g3"]))]);
-      return Result;
+    this.Render = function () {
+      pas.GameBase.TGameBase.Render.call(this);
     };
-    if ($mod.noteMap.has($mod.KeyToChord(aEvent.key))) return Result;
-    if (aEvent.repeat) return Result;
-    note = pas.audio.Player.AddNote(pas.audio.TNote.$create("Create$1",[$mod.ChordToNote($mod.KeyToChord(aEvent.key)),pas.audio.Player.GetTime(),pas.audio.Player.GetTime() + 1000,$mod.tone]));
-    $mod.noteMap.set($mod.KeyToChord(aEvent.key),note);
-    return Result;
-  };
-  this.keyUp = function (aEvent) {
-    var Result = false;
-    var note = null;
-    if (!$mod.noteMap.has($mod.KeyToChord(aEvent.key))) return Result;
-    note = rtl.getObject($mod.noteMap.get($mod.KeyToChord(aEvent.key)));
-    note.StopTime = pas.audio.Player.GetTime();
-    $mod.noteMap.delete($mod.KeyToChord(aEvent.key));
-    pas.System.Writeln(note.StartTime,",",note.StopTime,",",$mod.KeyToChord(aEvent.key));
-    return Result;
-  };
-  this.FetchSamples = async function (APath) {
-    var Result = null;
-    var response = null;
-    var arrayBuf = null;
-    response = await window.fetch(APath);
-    if (!response.ok) {
-      throw pas.SysUtils.Exception.$create("Create$1",["HTTP error! status: " + ("" + response.status)])}
-     else {
-      arrayBuf=await(response.arrayBuffer());
-      Result = new Float32Array(arrayBuf);
+    this.AfterResize = function () {
+      var i = 0;
+      if (this.charLbl != null) {
+        this.charLbl.fWidth = this.Canvas.width;
+        this.charLbl.fHeight = this.Canvas.height;
+        this.targetLbl.fPosition.Y = Math.round(this.Canvas.height / 10);
+        this.targetLbl.fWidth = this.Canvas.width;
+        this.targetLbl.fHeight = Math.round(this.Canvas.height / 5);
+        this.winsLbl.fWidth = Math.round(this.Canvas.width / 3);
+        this.winsLbl.fHeight = Math.round(this.Canvas.height / 10);
+        this.infoPnl.fWidth = this.Canvas.width;
+        this.infoPnl.fHeight = Math.round(this.Canvas.height / 10);
+        this.roundProgress.fPosition.Y = this.Canvas.height - (this.Canvas.height / 10);
+        this.roundProgress.fWidth = this.Canvas.width;
+        this.roundProgress.fHeight = pas.Math.Ceil(this.Canvas.height / 10);
+        this.prepLbl.fWidth = this.Canvas.width;
+        this.prepLbl.fHeight = this.Canvas.height;
+        this.prepLbl2.fPosition.Y = this.Canvas.height - (this.Canvas.height / 10);
+        this.prepLbl2.fWidth = this.Canvas.width;
+        this.prepLbl2.fHeight = pas.Math.Ceil(this.Canvas.height / 10);
+        this.prepPnl.fWidth = this.Canvas.width;
+        this.prepPnl.fHeight = this.Canvas.height;
+        this.statusLbl.fWidth = this.Canvas.width;
+        this.statusLbl.fHeight = this.Canvas.height;
+        for (i = 0; i <= 2; i++) {
+          this.instructionLbl[i].fPosition.Y = (i + 7) * (this.Canvas.height / 10);
+          this.instructionLbl[i].fWidth = this.Canvas.width;
+          this.instructionLbl[i].fHeight = rtl.trunc(this.Canvas.height / 10);
+        };
+      };
     };
-    return Result;
-  };
+    this.DoKeyPress = function (AKeyCode) {
+      var s = "";
+      var ch = "";
+      var i = 0;
+      if (this.rnd.State === 3) {
+        if (AKeyCode.length !== 1) return;
+        ch = pas.SysUtils.LowerCase(AKeyCode);
+        s = this.rnd.Buffer + ch;
+        this.rnd.InputSequence = this.rnd.InputSequence + ch;
+        i = pas.System.Pos(this.rnd.Word,s);
+        if (i > 0) {
+          pas.System.Delete({get: function () {
+              return s;
+            }, set: function (v) {
+              s = v;
+            }},i,this.rnd.Word.length);
+          this.AddMatch();
+        } else this.AddMiss(ch);
+        this.rnd.Buffer = s;
+        if (s.length > 50) {
+          this.charLbl.fCaption = pas.System.Copy$1(s,s.length - 50)}
+         else this.charLbl.fCaption = s;
+      } else if (this.rnd.State === 4) {
+        var $tmp = AKeyCode;
+        if ($tmp === "F5") {
+          this.StartRound(this.rnd.Word,this.lastTime,3,20)}
+         else if ($tmp === "Enter") {
+          this.SubmitScore()}
+         else if ($tmp === "Escape") window.location.replace("\/ld50\/index.php");
+      };
+    };
+  });
   $mod.$main = function () {
-    $mod.FetchSamples("\/bass.raw").then(function (x) {
-      var Result = undefined;
-      $mod.bass = pas.audio.Player.AddInstrument(pas.audiostuff.TSample.$create("Create$2",[2200,44100,rtl.getObject(x),false]));
-      $mod.bass.DefaultADSR.Attack = 0.05;
-      $mod.bass.DefaultADSR.Decay = 0.05;
-      $mod.bass.DefaultADSR.Sustain = 0.9;
-      $mod.bass.DefaultADSR.Release = 0.4;
-      return Result;
-    });
-    $mod.FetchSamples("\/bass2.raw").then(function (x) {
-      var Result = undefined;
-      $mod.tone = pas.audio.Player.AddInstrument(pas.audiostuff.TSample.$create("Create$2",[300 * 2,16000,rtl.getObject(x),false]));
-      $mod.tone.DefaultADSR.Attack = 0.005;
-      $mod.tone.DefaultADSR.Decay = 0.005;
-      $mod.tone.DefaultADSR.Sustain = 0.2;
-      $mod.tone.DefaultADSR.Release = 0.3;
-      return Result;
-    });
-    $mod.noteMap = new Map();
-    window.onkeydown = rtl.createSafeCallback($mod,"keyDown");
-    window.onkeyup = rtl.createSafeCallback($mod,"keyUp");
-    window.setTimeout(rtl.createSafeCallback($mod,"refill"),1);
+    $mod.TLD50.$create("Create$1").Run();
   };
 });
 //# sourceMappingURL=ld50.js.map

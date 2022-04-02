@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils,
-  js, audio;
+  js, web, audio;
 
 type
   TBassDrum = class(TInstrument)
@@ -32,10 +32,30 @@ type
     constructor Create(ANaturalFreq, ASampleRate: double; ASample: TJSFloat32Array; ALooping: boolean);
   end;
 
+function FetchSamples(APath: string): TJSFloat32Array; async;
+
 implementation
 
 uses
   math;
+
+function FetchSamples(APath: string): TJSFloat32Array; async;
+var
+  response: TJSResponse;
+  arrayBuf: TJSArrayBuffer;
+begin
+  response:=await(window.fetch(APath));
+
+  if not response.ok then
+    raise Exception.Create('HTTP error! status: '+str(response.status))
+  else begin
+    asm
+      arrayBuf=await(response.arrayBuffer());
+    end;
+
+    result:=TJSFloat32Array.new(arrayBuf);
+  end;
+end;
 
 const
   startFreq = 1e3;
@@ -70,6 +90,12 @@ begin
     Index:=Round(ph);
     if index>=fSamples.length then
     begin
+      if not fLoop then
+      begin
+        ANote.Done:=true;
+        break;
+      end;
+
       wrappedIndex:=Index mod fSamples.length;
       ph:=ph-(Index-wrappedIndex);
       index:=wrappedIndex;
@@ -142,6 +168,27 @@ begin
 
   ANote.LastPhase:=ph;
 end;
+
+{procedure LoadSamples;
+begin
+  FetchSamples('/samples/bass.raw')._then(function(x: JSValue): JSValue
+  begin
+    //writeln('test ', TJSFloat32Array(x).length);
+    bass:=MusicPlayer.AddInstrument(TSample.Create(2200, 44100, TJSFloat32Array(x), false));
+    bass.DefaultADSR.Attack:=0.05;
+    bass.DefaultADSR.Decay:=0.05;
+    bass.DefaultADSR.Sustain:=0.9;
+    bass.DefaultADSR.Release:=0.4;
+  end);
+  FetchSamples('/samples/bass2.raw')._then(function(x: JSValue): JSValue
+  begin
+    tone:=MusicPlayer.AddInstrument(TSample.Create(300*2, 16000, TJSFloat32Array(x), false));
+    tone.DefaultADSR.Attack:=0.005;
+    tone.DefaultADSR.Decay:=0.005;
+    tone.DefaultADSR.Sustain:=0.2;
+    tone.DefaultADSR.Release:=0.3;
+  end);
+end;}
 
 end.
 

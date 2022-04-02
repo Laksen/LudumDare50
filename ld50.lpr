@@ -3,290 +3,382 @@ program ld50;
 {$mode objfpc}
 
 uses
-  JS, fpjson, Classes, SysUtils, Web,
-  libjquery,webaudio,
-  audio, audiostuff;
-
-procedure refill;
-begin
-  Player.Update;   
-  window.setTimeout(@refill, 1);
-end;
-
-var
-  tone, bass: TInstrument;
-  x: JSValue;
-  noteMap: TJSMap;
-
-function ChordToNote(s: string): double;
-begin
-  case s of
-    'c1': exit(261.63);
-    'd1': exit(293.66);
-    'e1': exit(329.63);
-    'f1': exit(349.23);
-    'g1': exit(392.00);
-    'a1': exit(440.00);
-    'h1': exit(493.88);
-
-    'c2': exit(261.63*2);
-    'd2': exit(293.66*2);
-    'e2': exit(329.63*2);
-    'f2': exit(349.23*2);
-    'g2': exit(392.00*2);
-    'a2': exit(440.00*2);
-    'h2': exit(493.88*2);
-
-    'c3': exit(261.63*4);
-    'd3': exit(293.66*4);
-    'e3': exit(329.63*4);
-    'f3': exit(349.23*4);
-    'g3': exit(392.00*4);
-    'a3': exit(440.00*4);
-    'h3': exit(493.88*4);
-  else
-    result:=0;
-  end;
-end;
-
-function KeyToChord(s: string): string;
-begin
-  case s of
-    'z': exit('c1');
-    'x': exit('d1');
-    'c': exit('e1');
-    'v': exit('f1');
-    'b': exit('g1');
-    'n': exit('a1');
-    'm': exit('h1');
-
-    's': exit('c2');
-    'd': exit('d2');
-    'f': exit('e2');
-    'g': exit('f2');
-    'h': exit('g2');
-    'j': exit('a2');
-    'k': exit('h2');
-
-    'e': exit('c3');
-    'r': exit('d3');
-    't': exit('e3');
-    'y': exit('f3');
-    'u': exit('g3');
-    'i': exit('a3');
-    'o': exit('h3');
-  else
-    result:=' ';
-  end;
-end;
-
-procedure play(inst: TInstrument; prog: string; start, spacing: double);
-var
-  note: TNote;
-  ch: Char;
-  chord: String;
-  skip: Boolean;
-  i: Integer;
-begin
-  skip:=false;
-  for i:=1 to length(prog) do
-  begin
-    if skip then
-    begin
-      skip:=false;
-      continue;
-    end;
-
-    ch:=prog[i];
-
-    if ch='.' then
-    begin
-      if note<>nil then
-      begin
-        note.StopTime:=start+(i-2)*spacing;
-        note:=nil;
-      end;
-    end
-    else if ch<>'-' then
-    begin
-      chord:=ch+prog[i+1];
-      skip:=true;
-
-      note:=player.AddNote(TNote.Create(ChordToNote(chord), start+(i-1)*spacing, start+(i+1)*spacing, inst));
-    end;
-  end;
-end;
+  JS, Classes, SysUtils, math, Web,
+  libjquery, webaudio,
+  audio, audiostuff,
+  GameVerlets, GameMath, GameBase, Resources, tmp, guibase, guictrls;
 
 type
-  TChord = record
-    Name: char;
-    Notes: array of string;
+  TRoundStatus = (
+    rsLoading,
+    rsLoaded,
+    rsStarting,
+    rsGoing,
+    rsEnded
+  );
+
+  TRound = record
+    State: TRoundStatus;
+
+    Word,
+    Buffer,
+    InputSequence: string;
+
+    StartTime,
+    StopTime: double;
+
+    Mistypes,
+    Correct: integer;
   end;
 
-procedure playCh(inst: TInstrument; prog: string; start, spacing: double; const Chords: array of TChord);
-var
-  notes: TList;
-  ch: Char;
-  i, i2: integer;
-  chord, n: String;
-  note: JSValue;
+  TLD50 = class(TGameBase)
+  private  
+    gameLayer,
+    prepLayer,
+    postLayer: TGamePlane;
+
+    // Post-game
+    statusLbl: TGUILabel;
+    instructionLbl: array[0..2] of TGUILabel;
+
+    // Prep            
+    prepPnl: TGUIPanel;
+    prepLbl2, prepLbl: TGUILabel;
+
+    // Game
+    charLbl,
+    targetLbl,
+    winsLbl: TGUILabel;
+    infoPnl: TGUIPanel;
+    roundProgress: TGUIProgressBar;
+
+    rnd: TRound;
+
+    lastTime: double;
+
+    bass: TInstrument;
+
+    procedure StartRound(const ATarget: string; ACurrentTime, APreRunTime, ARoundLength: double);
+    procedure EndRound;
+    procedure AddMatch;
+    procedure AddMiss(const AKeyCode: string);
+
+    procedure SubmitScore;
+  protected
+    procedure InitializeResources; override;
+    procedure AfterLoad; override;
+
+    procedure Update(ATimeMS: double); override;
+    procedure Render; override;
+    procedure AfterResize; override;
+
+    procedure DoKeyPress(const AKeyCode: string); override;
+  end;
+
+procedure TLD50.StartRound(const ATarget: string; ACurrentTime, APreRunTime, ARoundLength: double);
 begin
-  notes:=tlist.Create;
-  for i:=1 to length(prog) do
+  rnd.Word:=ATarget;
+  rnd.Buffer:='>';
+  rnd.InputSequence:='';
+  rnd.Mistypes:=0;
+  rnd.Correct:=0;
+  rnd.StartTime:=ACurrentTime+APreRunTime*1e3;
+  rnd.StopTime:=ACurrentTime+(APreRunTime+ARoundLength)*1e3;
+  rnd.State:=rsStarting;
+
+  charLbl.Caption:=rnd.Buffer;
+  targetLbl.Caption:=format('>%s<', [ATarget]);
+
+  roundProgress.Min:=ACurrentTime+APreRunTime*1e3;
+  roundProgress.Max:=ACurrentTime+(APreRunTime+ARoundLength)*1e3;
+  roundProgress.Value:=0;
+                           
+  prepLayer.Visible:=true;
+  gameLayer.Visible:=false;
+  postLayer.Visible:=false;
+  prepLbl2.Caption:=format('%4.3f', [(APreRunTime*1e3)/1000]);
+end;
+
+procedure TLD50.EndRound;
+begin
+  statusLbl.Caption:=Format('Correct: %d', [rnd.Correct]);
+end;
+
+procedure TLD50.AddMatch;
+begin
+  inc(rnd.Correct);
+  winsLbl.Caption:=Format('Correct: %d', [rnd.Correct]);
+
+  MusicPlayer.AddNote(TNote.Create(440+20*rnd.Correct, MusicPlayer.Time+0.05, MusicPlayer.Time+0.30, bass));
+end;
+
+procedure TLD50.AddMiss(const AKeyCode: string);
+begin
+  inc(rnd.Mistypes);
+end;
+
+procedure TLD50.SubmitScore;
+var
+  form: TJSHTMLFormElement;
+begin
+  TJSHTMLInputElement(document.getElementsByName('run_score')[0]).value:=inttostr(rnd.Correct);
+  TJSHTMLInputElement(document.getElementsByName('run_sequence')[0]).value:=rnd.InputSequence;
+  TJSHTMLFormElement(document.getElementById('submit_form')).submit;
+end;
+
+procedure TLD50.InitializeResources;
+begin
+  TResources.AddResource('/ld50/samples/bass.raw', rtArrayBuffer);
+end;
+
+procedure TLD50.AfterLoad;
+const
+  instructionCaptions: array[0..2] of string = ('Retry: F5', 'Submit score: Enter', 'Exit to menu: Escape');
+var
+  i: Integer;
+begin
+  bass:=MusicPlayer.AddInstrument(TSample.Create(2200, 44100, TJSFloat32Array.new(TResources.GetArrayBuffer('/ld50/samples/bass.raw')), false));
+  bass.DefaultADSR.Attack:=0.005;
+  bass.DefaultADSR.Decay:=0.005;
+  bass.DefaultADSR.Sustain:=0.2;
+  bass.DefaultADSR.Release:=0.3;
+
+  gameLayer:=AddPlane(0);
+  prepLayer:=AddPlane(1);
+  postLayer:=AddPlane(1, false);
+
+  // Game
+  charLbl:=TGUILabel.Create;
+  charLbl.Size:=72;
+  charLbl.Width:=Canvas.width;
+  charLbl.Height:=Canvas.height;
+  charLbl.HAlign:=haRight;
+  charLbl.VAlign:=vaMiddle;
+  charLbl.Caption:='test';
+  AddElement(charLbl, gameLayer);
+
+  targetLbl:=TGUILabel.Create;
+  targetLbl.Size:=50;                       
+  targetLbl.Position.Y:=round(Canvas.height/10);
+  targetLbl.Width:=Canvas.width;
+  targetLbl.Height:=round(Canvas.height/5);
+  targetLbl.HAlign:=haMiddle;
+  targetLbl.VAlign:=vaMiddle;
+  targetLbl.Caption:='><';
+  AddElement(targetLbl, gameLayer);
+
+  winsLbl:=TGUILabel.Create;
+  winsLbl.Size:=48;
+  winsLbl.Width:=round(Canvas.width/3);
+  winsLbl.Height:=round(Canvas.height/10);
+  winsLbl.HAlign:=haLeft;
+  winsLbl.VAlign:=vaMiddle;
+  winsLbl.Caption:='Correct: 0';
+
+  infoPnl:=TGUIPanel.Create;
+  infoPnl.Width:=Canvas.width;
+  infoPnl.Height:=round(Canvas.height/10);
+  infoPnl.BackGround:='#7bca92';
+  infoPnl.AddChild(winsLbl);
+  AddElement(infoPnl, gameLayer);
+
+  roundProgress:=TGUIProgressBar.Create;        
+  roundProgress.Position.Y:=round(Canvas.height-Canvas.height/10);
+  roundProgress.Width:=Canvas.width;
+  roundProgress.Height:=ceil(Canvas.height/10);
+  roundProgress.Min:=0;
+  roundProgress.Max:=100;
+  roundProgress.Value:=0;
+  roundProgress.Foreground:='#7bca92';
+  AddElement(roundProgress, gameLayer);
+
+  // Prep
+  prepLbl:=TGUILabel.Create;
+  prepLbl.Size:=72;
+  prepLbl.Width:=Canvas.width;
+  prepLbl.Height:=Canvas.height;
+  prepLbl.HAlign:=haMiddle;
+  prepLbl.VAlign:=vaMiddle;
+  prepLbl.Caption:='Get ready';
+
+  prepLbl2:=TGUILabel.Create;
+  prepLbl2.Size:=72;          
+  prepLbl2.Position.Y:=round(Canvas.height-Canvas.height/10);
+  prepLbl2.Width:=Canvas.width;
+  prepLbl2.Height:=ceil(Canvas.height/10);
+  prepLbl2.HAlign:=haMiddle;
+  prepLbl2.VAlign:=vaMiddle;
+  prepLbl2.Caption:='0.000';
+
+  prepPnl:=TGUIPanel.Create;
+  prepPnl.Width:=Canvas.width;
+  prepPnl.Height:=Canvas.height;
+  prepPnl.AddChild(prepLbl);
+  prepPnl.AddChild(prepLbl2);
+
+  AddElement(prepPnl, prepLayer);
+  AddElement(prepLbl2, gameLayer);
+
+  // Post game
+  statusLbl:=TGUILabel.Create;
+  statusLbl.Size:=72;
+  statusLbl.Width:=Canvas.width;
+  statusLbl.Height:=Canvas.height;
+  statusLbl.HAlign:=haMiddle;
+  statusLbl.VAlign:=vaMiddle;
+  statusLbl.Caption:='Words: 0';
+  AddElement(statusLbl, postLayer);
+
+  for i:=0 to 2 do
   begin
-    ch:=prog[i];
+    instructionLbl[i]:=TGUILabel.Create;
+    instructionLbl[i].Size:=50;
+    instructionLbl[i].Position.y:=(i+7)*(Canvas.height/10);
+    instructionLbl[i].Width:=Canvas.width;
+    instructionLbl[i].Height:=Canvas.height div 10;
+    instructionLbl[i].HAlign:=haMiddle;
+    instructionLbl[i].VAlign:=vaMiddle;
+    instructionLbl[i].Caption:=instructionCaptions[i];
+    AddElement(instructionLbl[i], postLayer);
+  end;
 
-    if ch='.' then
-    begin
-      if notes.Count>0 then
+  rnd.State:=rsLoaded;
+end;
+
+procedure TLD50.Update(ATimeMS: double);
+var
+  target: String;
+begin
+  inherited Update(ATimeMS);
+
+  lastTime:=ATimeMS;
+
+  case rnd.State of
+    rsLoaded:
       begin
-        for note in notes do
-          TNote(note).StopTime:=start+(i-2)*spacing;
-        notes.clear;
+        target:=TJSHTMLInputElement(document.getElementsByName('run_word')[0]).value;
+        StartRound(target, ATimeMS, 3, 20);
       end;
-    end
-    else if ch<>'-' then
-    begin
-      chord:=ch;
-
-      for i2:=0 to high(chords) do
+    rsStarting:
       begin
-        if chords[i2].name=chord then
+        prepLbl2.Caption:=format('%4.3f', [(rnd.StartTime-ATimeMS)/1000]);
+        if ATimeMS>=rnd.StartTime then
         begin
-          for n in chords[i2].Notes do
-            notes.add(player.AddNote(TNote.Create(ChordToNote(n), start+(i-1)*spacing, start+(i+1)*spacing, inst)));
-          break;
+          rnd.State:=rsGoing;
+          prepLayer.Visible:=false;
+          gameLayer.Visible:=true;
+          postLayer.Visible:=false;
         end;
       end;
-    end;
+    rsGoing:
+      begin                        
+        roundProgress.Value:=ATimeMS;
+        prepLbl2.Caption:=format('Remaining: %4.3f', [(rnd.StopTime-ATimeMS)/1000]);
+
+        if ATimeMS>=rnd.StopTime then
+        begin
+          EndRound();
+
+          rnd.State:=rsEnded;
+          prepLayer.Visible:=false;
+          gameLayer.Visible:=false;
+          postLayer.Visible:=true;
+        end;
+      end;
   end;
-  notes.Free;
 end;
 
-function Chord(name: char; const notes: array of string): TChord;
+procedure TLD50.Render;
 begin
-  result.name:=name;
-  result.Notes:=notes;
+  inherited Render;
 end;
 
-function keyDown(aEvent: TJSKeyBoardEvent): boolean;
+procedure TLD50.AfterResize;
 var
-  note: TNote;
-  x: double;
-  sp, le, f: double;
-  i: integer;
+  i: Integer;
 begin
-  if aevent.key='q' then
+  if assigned(charLbl) then
   begin
-    x:=Player.time;
+    charLbl.Width:=Canvas.width;
+    charLbl.Height:=Canvas.height;
 
-    sp:=0.33/4;
-    le:=sp/2;
+    targetLbl.Position.Y:=round(Canvas.height/10);
+    targetLbl.Width:=Canvas.width;
+    targetLbl.Height:=round(Canvas.height/5);
 
-    play(bass,   'f1--....f2--....a2--....f1--....f2--....a2--....f1--....f2--....'+
-                 'c1--....c2--....e2--....c1--....c2--....e2--....c1--....c2--....'+
-                 'd1--....d2--....f2--....d1--....d2--....f2--....d1--....d2--....'+
-                 'd1--....d2--....f2--....d1--....d2--....f2--....c1--....c2--....', x, sp/8);
+    winsLbl.Width:=round(Canvas.width/3);
+    winsLbl.Height:=round(Canvas.height/10);
 
-    playCh(tone, 'f-----------------------------------------------------------....'+
-                 'F-----------------------------------------------------------....'+
-                 'D---------------------------------------------------------------'+
-                 '----------------------------....c---------------------------....', x, sp/8,
-                 [Chord('f', ['c3','f3','a3']), Chord('F', ['c3','e3','a3']), Chord('D',['d3','f3','a3']), Chord('c',['c3','e3','g3'])]);
+    infoPnl.Width:=Canvas.width;
+    infoPnl.Height:=round(Canvas.height/10);
 
-    exit;
-  end;
-  {else if aevent.key='w' then
-  begin
-    x:=Player.time;
+    roundProgress.Position.y:=Canvas.height-Canvas.height/10;
+    roundProgress.Width:=Canvas.width;
+    roundProgress.Height:=ceil(Canvas.height/10);
 
-    sp:=0.33/3.3;
-    f:=0.08;
-    le:=sp/2;
+    prepLbl.Width:=Canvas.width;
+    prepLbl.Height:=Canvas.height;
+    prepLbl2.Position.y:=Canvas.height-Canvas.height/10;
+    prepLbl2.Width:=Canvas.width;
+    prepLbl2.Height:=ceil(Canvas.height/10);
+    prepPnl.Width:=Canvas.width;
+    prepPnl.Height:=Canvas.height;
 
+    statusLbl.Width:=Canvas.width;
+    statusLbl.Height:=Canvas.height;
 
-    for i in [0,2,4,6] do
+    for i:=0 to 2 do
     begin
-      note:=player.AddNote(TNote.Create(ChordToNote('a1'), x+sp*(00+i)+0*f, x+sp*(0+i)+le, tone));
-      note:=player.AddNote(TNote.Create(ChordToNote('a2'), x+sp*(00+i)+1*f, x+sp*(0+i)+le, tone));
-
-      note:=player.AddNote(TNote.Create(ChordToNote('g1'), x+sp*(08+i)+0*f, x+sp*(08+i)+le, tone));
-      note:=player.AddNote(TNote.Create(ChordToNote('g2'), x+sp*(08+i)+1*f, x+sp*(08+i)+le, tone));
-
-      note:=player.AddNote(TNote.Create(ChordToNote('e1'), x+sp*(16+i)+0*f, x+sp*(16+i)+le, tone));
-      note:=player.AddNote(TNote.Create(ChordToNote('e2'), x+sp*(16+i)+1*f, x+sp*(16+i)+le, tone));
-
-      note:=player.AddNote(TNote.Create(ChordToNote('f1'), x+sp*(24+i)+0*f, x+sp*(24+i)+le, tone));
-      note:=player.AddNote(TNote.Create(ChordToNote('f2'), x+sp*(24+i)+1*f, x+sp*(24+i)+le, tone));
+      instructionLbl[i].Position.y:=(i+7)*(Canvas.height/10);
+      instructionLbl[i].Width:=Canvas.width;
+      instructionLbl[i].Height:=Canvas.height div 10;
     end;
-
-    exit;
-  end;}
-
-  if noteMap.has(KeyToChord(aevent.key)) then exit;
-  if aEvent._repeat then exit;
-
-  note:=player.AddNote(TNote.Create(ChordToNote(KeyToChord(aevent.key)), player.Time, player.time+1000, tone));
-  noteMap.&set(KeyToChord(aevent.key), note);
-end;
-
-function keyUp(aEvent: TJSKeyBoardEvent): boolean;
-var
-  note: TNote;
-begin
-  if not noteMap.has(KeyToChord(aevent.key)) then exit;
-
-  note:=TNote(noteMap.get(KeyToChord(aevent.key)));
-  note.StopTime:=player.Time;
-  noteMap.delete(KeyToChord(aevent.key));         
-
-  writeln(note.StartTime,',',note.StopTime,',',KeyToChord(aevent.key));
-end;
-
-function FetchSamples(APath: string): TJSFloat32Array; async;
-var
-  response: TJSResponse;
-  arrayBuf: TJSArrayBuffer;
-begin
-  response:=await(window.fetch(APath));
-
-  if not response.ok then
-    raise Exception.Create('HTTP error! status: '+str(response.status))
-  else begin
-    asm
-      arrayBuf=await(response.arrayBuffer());
-    end;
-
-    result:=TJSFloat32Array.new(arrayBuf);
   end;
 end;
 
+procedure TLD50.DoKeyPress(const AKeyCode: string);
+var
+  s, ch: String;
+  i: Integer;
+begin
+  if rnd.State=rsGoing then
+  begin   
+    if length(AKeyCode)<>1 then exit;
 
+    ch:=lowercase(AKeyCode);
+
+    s:=rnd.Buffer+ch;
+    rnd.InputSequence:=rnd.InputSequence+ch;
+
+    i:=pos(rnd.Word, s);
+    if i>0 then
+    begin
+      delete(s, i, length(rnd.Word));
+      AddMatch();
+    end
+    else
+      AddMiss(ch);
+
+    rnd.Buffer:=s;
+
+    if length(s)>50 then
+      charLbl.Caption:=copy(s, length(s)-50)
+    else
+      charLbl.Caption:=s;
+  end
+  else if rnd.State=rsEnded then
+  begin
+    case AKeyCode of
+      'F5':
+        StartRound(rnd.Word, lastTime, 3, 20);
+      'Enter':
+        SubmitScore;
+      'Escape':
+        window.location.replace('/ld50/index.php');
+    end;
+  end;
+end;
 
 begin
-  //tone:=Player.AddInstrument(TTone.Create);
-
-  FetchSamples('/bass.raw')._then(function(x: JSValue): JSValue
-  begin
-    //writeln('test ', TJSFloat32Array(x).length);
-    bass:=Player.AddInstrument(TSample.Create(2200, 44100, TJSFloat32Array(x), false));
-    bass.DefaultADSR.Attack:=0.05;
-    bass.DefaultADSR.Decay:=0.05;
-    bass.DefaultADSR.Sustain:=0.9;
-    bass.DefaultADSR.Release:=0.4;
-  end);
-  FetchSamples('/bass2.raw')._then(function(x: JSValue): JSValue
-  begin
-    tone:=Player.AddInstrument(TSample.Create(300*2, 16000, TJSFloat32Array(x), false));
-    tone.DefaultADSR.Attack:=0.005;
-    tone.DefaultADSR.Decay:=0.005;
-    tone.DefaultADSR.Sustain:=0.2;
-    tone.DefaultADSR.Release:=0.3;
-  end);
-
-  noteMap:=TJSMap.new;
-
-  window.onkeydown:=@keyDown;
-  window.onkeyup:=@keyUp;
-  window.setTimeout(@refill, 1);
+  TLD50.Create.Run();
 end.
